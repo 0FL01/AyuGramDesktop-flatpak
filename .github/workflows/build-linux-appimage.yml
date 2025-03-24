@@ -76,7 +76,7 @@ jobs:
           mv *.AppImage $OUTPUT
 
       - name: Загрузка артефактов
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: AyuGram-AppImage
           path: AyuGram-*-x86_64.AppImage
