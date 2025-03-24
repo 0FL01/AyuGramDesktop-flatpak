@@ -1,0 +1,88 @@
+name: Сборка Linux AppImage
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверка репозитория
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Установка зависимостей
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl python3 python3-pip
+
+      - name: Установка poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Подготовка к сборке
+        run: |
+          ./Telegram/build/prepare/linux.sh
+
+      - name: Сборка проекта
+        run: |
+          docker run --rm -i \
+            -v "$PWD:/usr/src/tdesktop" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D TDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }} \
+            -D TDESKTOP_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+
+      - name: Установка инструментов для AppImage
+        run: |
+          sudo apt-get install -y libfuse2
+          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+      - name: Подготовка AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+          
+          cp out/Release/Telegram AppDir/usr/bin/
+          cp Telegram/Resources/art/icon512.png AppDir/usr/share/icons/hicolor/512x512/apps/telegram.png
+          
+          cat > AppDir/usr/share/applications/telegram.desktop << EOL
+          [Desktop Entry]
+          Name=AyuGram
+          Comment=AyuGram Desktop Client
+          Exec=Telegram
+          Icon=telegram
+          Terminal=false
+          Type=Application
+          Categories=Network;InstantMessaging;Qt;
+          EOL
+
+      - name: Создание AppImage
+        run: |
+          export OUTPUT="AyuGram-$(git describe --tags --always)-x86_64.AppImage"
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
+          mv *.AppImage $OUTPUT
+
+      - name: Загрузка артефактов
+        uses: actions/upload-artifact@v3
+        with:
+          name: AyuGram-AppImage
+          path: AyuGram-*-x86_64.AppImage
+
+      - name: Публикация релиза
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: AyuGram-*-x86_64.AppImage 
