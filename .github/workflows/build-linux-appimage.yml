@@ -20,6 +20,33 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Освобождение места на диске
+        run: |
+          # Удаляем ненужные пакеты и образы
+          sudo apt-get remove -y '^ghc-.*' || true
+          sudo apt-get remove -y '^dotnet-.*' || true
+          sudo apt-get remove -y '^llvm-.*' || true
+          sudo apt-get remove -y 'php.*' || true
+          sudo apt-get remove -y azure-cli || true
+          sudo apt-get remove -y google-chrome-stable || true
+          sudo apt-get remove -y google-cloud-sdk || true
+          sudo apt-get remove -y firefox || true
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          
+          # Удаляем каталоги, занимающие много места
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          
+          # Удаляем кэши Docker
+          docker system prune -af
+          
+          # Показываем доступное пространство
+          df -h
+
+
       - name: Установка зависимостей
         run: |
           sudo apt-get update
