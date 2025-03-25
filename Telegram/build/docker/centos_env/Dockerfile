@@ -274,10 +274,10 @@ RUN git clone -b v0.11.1 --depth=1 {{ GIT }}/libjxl/libjxl.git \
 		-DJPEGXL_ENABLE_OPENEXR=OFF \
 		-DJPEGXL_ENABLE_SKCMS=OFF \
 	&& cmake --build build --parallel \
-	&& DESTDIR="{{ LibrariesPath }}/libjxl-cache" \
-	&& cmake --install build \
-	&& cp build/lib/libjpegli-static.a $DESTDIR/usr/local/lib64/libjpeg.a \
-	&& ar rcs $DESTDIR/usr/local/lib64/libjpeg.a build/lib/CMakeFiles/jpegli-libjpeg-obj.dir/jpegli/libjpeg_wrapper.cc.o \
+	&& DESTDIR="{{ LibrariesPath }}/libjxl-cache" cmake --install build \
+	&& mkdir -p "{{ LibrariesPath }}/libjxl-cache/usr/local/lib64" \
+	&& cp build/lib/libjpegli-static.a "{{ LibrariesPath }}/libjxl-cache/usr/local/lib64/libjpeg.a" \
+	&& ar rcs "{{ LibrariesPath }}/libjxl-cache/usr/local/lib64/libjpeg.a" build/lib/CMakeFiles/jpegli-libjpeg-obj.dir/jpegli/libjpeg_wrapper.cc.o \
 	&& cd .. \
 	&& rm -rf libjxl
 
@@ -872,13 +872,13 @@ COPY --link --from=glib {{ LibrariesPath }}/glib-cache /
 COPY --link --from=gobject-introspection {{ LibrariesPath }}/gobject-introspection-cache /
 COPY --link --from=qt {{ LibrariesPath }}/qt-cache /
 COPY --link --from=breakpad {{ LibrariesPath }}/breakpad-cache /
-COPY --link --from=webrtc {{ LibrariesPath }}/tg_owt tg_owt
-COPY --link --from=webrtc_release {{ LibrariesPath }}/tg_owt/out/Release tg_owt/out/Release
+COPY --link --from=webrtc {{ LibrariesPath }}/tg_owt tg_owt/
+COPY --link --from=webrtc_release {{ LibrariesPath }}/tg_owt/out/Release tg_owt/out/Release/
 COPY --link --from=libwebp {{ LibrariesPath }}/libwebp-cache /
 COPY --link --from=ada {{ LibrariesPath }}/ada-cache /
 
 {%- if DEBUG %}
-COPY --link --from=webrtc_debug {{ LibrariesPath }}/tg_owt/out/Debug tg_owt/out/Debug
+COPY --link --from=webrtc_debug {{ LibrariesPath }}/tg_owt/out/Debug tg_owt/out/Debug/
 {%- endif %}
 
 WORKDIR ../tdesktop
