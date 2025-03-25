@@ -68,11 +68,16 @@ jobs:
       - name: Подготовка к сборке
         run: |
           ./Telegram/build/prepare/linux.sh
+          
+          # Создаем директорию out и устанавливаем права
+          mkdir -p out
+          chmod -R 777 out
 
       - name: Сборка проекта
         run: |
           docker run --rm -i \
             -v "$PWD:/usr/src/tdesktop" \
+            -u $(id -u):$(id -g) \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }} \
