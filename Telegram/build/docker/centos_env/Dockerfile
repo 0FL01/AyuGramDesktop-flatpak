@@ -37,8 +37,9 @@ WORKDIR {{ LibrariesPath }}
 ENV AR gcc-ar
 ENV RANLIB gcc-ranlib
 ENV NM gcc-nm
-ENV CFLAGS {% if DEBUG %}-g{% endif %} -O3 {% if LTO %}-flto=auto -ffat-lto-objects{% endif %} -pipe -fPIC -fno-strict-aliasing -fexceptions -fasynchronous-unwind-tables -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fstack-protector-strong -fstack-clash-protection -fcf-protection -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS
+ENV CFLAGS -Os -ffunction-sections -fdata-sections -g0 -pipe -fPIC -fno-strict-aliasing -fno-omit-frame-pointer
 ENV CXXFLAGS $CFLAGS
+ENV LDFLAGS -Wl,--gc-sections
 
 FROM builder AS patches
 RUN git init patches \
@@ -737,7 +738,7 @@ RUN git clone -b {{ QT_TAG }} --depth=1 {{ GIT }}/qt/qt5.git \
 	&& find ../../patches/qtwayland_{{ QT }} -type f -print0 | sort -z | xargs -r0 git apply \
 	&& cd .. \
 	&& cmake -GNinja -B build . \
-		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_BUILD_TYPE=MinSizeRel \
 		-DBUILD_SHARED_LIBS=OFF \
 		-DQT_GENERATE_SBOM=OFF \
 		-DINPUT_libpng=qt \
@@ -747,7 +748,20 @@ RUN git clone -b {{ QT_TAG }} --depth=1 {{ GIT }}/qt/qt5.git \
 		-DFEATURE_xcb_sm=OFF \
 		-DINPUT_dbus=runtime \
 		-DINPUT_openssl=linked \
-	&& cmake --build build --parallel \
+		-DFEATURE_concurrent=OFF \
+		-DFEATURE_dbus=OFF \
+		-DFEATURE_sql=OFF \
+		-DFEATURE_testlib=OFF \
+		-DFEATURE_printsupport=OFF \
+		-DFEATURE_widgets=ON \
+		-DFEATURE_opengl=ON \
+		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+		-DFEATURE_reduce_relocations=OFF \
+		-DFEATURE_developer_build=OFF \
+		-DFEATURE_system_zlib=ON \
+	&& cmake --build build --parallel 2 --clean-first \
+	&& rm -rf build/qtbase/CMakeFiles \
+	&& rm -rf build/qtdeclarative/CMakeFiles \
 	&& DESTDIR="{{ LibrariesPath }}/qt-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf qt5
@@ -796,13 +810,13 @@ RUN git init tg_owt \
 WORKDIR tg_owt
 
 FROM webrtc AS webrtc_release
-RUN cmake --build out --config Release --parallel \
+RUN cmake --build out --config MinSizeRel --parallel 2 \
 	&& find out -mindepth 1 -maxdepth 1 ! -name Release -exec rm -rf {} \;
 
 {%- if DEBUG %}
 
 FROM webrtc AS webrtc_debug
-RUN cmake --build out --config Debug --parallel \
+RUN cmake --build out --config Debug --parallel 2 \
 	&& find out -mindepth 1 -maxdepth 1 ! -name Debug -exec rm -rf {} \;
 {%- endif %}
 
