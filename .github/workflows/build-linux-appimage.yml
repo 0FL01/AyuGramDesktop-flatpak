@@ -29,19 +29,23 @@ jobs:
           # Проверим доступную память
           free -h
           
-          # Устанавливаем необходимые модули
-          sudo apt-get update
-          sudo apt-get install -y zram-tools
+          # Загружаем модуль ядра zram, если не загружен
+          sudo modprobe zram
           
-          # Настраиваем zram с использованием zstd
-          sudo zramctl --find --size 8G --algorithm zstd
-          ZRAM_DEV=$(sudo zramctl | tail -n1 | cut -d' ' -f1)
+          # Создаем zram устройство через sysfs
+          echo 1 | sudo tee /sys/class/zram-control/hot_add
           
-          # Форматируем zram устройство как swap
-          sudo mkswap $ZRAM_DEV
-          sudo swapon $ZRAM_DEV
+          # Устанавливаем размер (8GB)
+          echo 8G | sudo tee /sys/block/zram0/disksize
           
-          # Проверим, что zram активирован
+          # Устанавливаем алгоритм сжатия zstd, если поддерживается
+          echo zstd | sudo tee /sys/block/zram0/comp_algorithm || echo "zstd не поддерживается, используем алгоритм по умолчанию"
+          
+          # Форматируем и активируем как swap
+          sudo mkswap /dev/zram0
+          sudo swapon /dev/zram0
+          
+          # Проверим статус
           sudo swapon --show
           free -h
 
