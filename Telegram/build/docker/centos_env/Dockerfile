@@ -274,7 +274,7 @@ RUN git clone -b v0.11.1 --depth=1 {{ GIT }}/libjxl/libjxl.git \
 		-DJPEGXL_ENABLE_OPENEXR=OFF \
 		-DJPEGXL_ENABLE_SKCMS=OFF \
 	&& cmake --build build --parallel \
-	&& export DESTDIR="{{ LibrariesPath }}/libjxl-cache" \
+	&& DESTDIR="{{ LibrariesPath }}/libjxl-cache" \
 	&& cmake --install build \
 	&& cp build/lib/libjpegli-static.a $DESTDIR/usr/local/lib64/libjpeg.a \
 	&& ar rcs $DESTDIR/usr/local/lib64/libjpeg.a build/lib/CMakeFiles/jpegli-libjpeg-obj.dir/jpegli/libjpeg_wrapper.cc.o \
@@ -760,9 +760,9 @@ RUN git clone -b {{ QT_TAG }} --depth=1 {{ GIT }}/qt/qt5.git \
 		-DFEATURE_developer_build=OFF \
 		-DFEATURE_system_zlib=ON \
 	&& cmake --build build --parallel 2 --clean-first \
+	&& DESTDIR="{{ LibrariesPath }}/qt-cache" cmake --install build \
 	&& rm -rf build/qtbase/CMakeFiles \
 	&& rm -rf build/qtdeclarative/CMakeFiles \
-	&& DESTDIR="{{ LibrariesPath }}/qt-cache" cmake --install build \
 	&& cd .. \
 	&& rm -rf qt5
 
