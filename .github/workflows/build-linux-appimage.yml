@@ -90,13 +90,28 @@ jobs:
           wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
+      - name: Проверка созданных файлов
+        run: |
+          find out -type f -name "Telegram" -o -name "AyuGram" | sort
+          ls -la out/Release/ || true
+          ls -la out/ || true
+          ls -la out/bin/ || true
+
       - name: Подготовка AppDir
         run: |
           mkdir -p AppDir/usr/bin
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
           
-          cp out/Release/Telegram AppDir/usr/bin/
+          # Ищем исполняемый файл и копируем его
+          EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
+          if [ -z "$EXECUTABLE" ]; then
+            echo "Ошибка: исполняемый файл не найден!"
+            exit 1
+          fi
+          
+          echo "Найден исполняемый файл: $EXECUTABLE"
+          cp "$EXECUTABLE" AppDir/usr/bin/Telegram
           cp Telegram/Resources/art/icon512.png AppDir/usr/share/icons/hicolor/512x512/apps/telegram.png
           
           cat > AppDir/usr/share/applications/telegram.desktop << EOL
