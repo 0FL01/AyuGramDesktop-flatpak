@@ -20,6 +20,31 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Отключение swap файла и создание zram
+        run: |
+          # Отключаем и удаляем существующий swap
+          sudo swapoff -a
+          sudo rm -f /swapfile
+          
+          # Проверим доступную память
+          free -h
+          
+          # Устанавливаем необходимые модули
+          sudo apt-get update
+          sudo apt-get install -y zram-tools
+          
+          # Настраиваем zram с использованием zstd
+          sudo zramctl --find --size 8G --algorithm zstd
+          ZRAM_DEV=$(sudo zramctl | tail -n1 | cut -d' ' -f1)
+          
+          # Форматируем zram устройство как swap
+          sudo mkswap $ZRAM_DEV
+          sudo swapon $ZRAM_DEV
+          
+          # Проверим, что zram активирован
+          sudo swapon --show
+          free -h
+
       - name: Освобождение места на диске
         run: |
           # Удаляем ненужные пакеты и образы
