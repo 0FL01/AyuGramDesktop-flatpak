@@ -810,13 +810,13 @@ RUN git init tg_owt \
 WORKDIR tg_owt
 
 FROM webrtc AS webrtc_release
-RUN cmake --build out --config MinSizeRel --parallel 2 \
+RUN cmake --build out --config Release --parallel \
 	&& find out -mindepth 1 -maxdepth 1 ! -name Release -exec rm -rf {} \;
 
 {%- if DEBUG %}
 
 FROM webrtc AS webrtc_debug
-RUN cmake --build out --config Debug --parallel 2 \
+RUN cmake --build out --config Debug --parallel \
 	&& find out -mindepth 1 -maxdepth 1 ! -name Debug -exec rm -rf {} \;
 {%- endif %}
 
