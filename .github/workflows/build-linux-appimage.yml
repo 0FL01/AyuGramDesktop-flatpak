@@ -125,10 +125,29 @@ jobs:
           Categories=Network;InstantMessaging;Qt;
           EOL
 
+      - name: Установка Qt для AppImage
+        run: |
+          sudo apt-get install -y qt5-default qtbase5-dev qttools5-dev-tools
+          
+      - name: Отладка Qt
+        run: |
+          find /usr -name "qmake" -type f
+          find /usr -path "*/qt5/bin/qmake" -type f
+          dpkg -l | grep qt
+          ls -la /usr/lib/qt5/bin/ || true
+
       - name: Создание AppImage
         run: |
           export OUTPUT="AyuGram-$(git describe --tags --always)-x86_64.AppImage"
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
+          # Находим qmake в системе
+          export QMAKE=$(find /usr -name "qmake" -type f | grep -v qt4 | head -n 1)
+          echo "Используем qmake: $QMAKE"
+          
+          # Устанавливаем другие необходимые переменные Qt
+          export QML_SOURCES_PATHS="${PWD}/out/Release"
+          export EXTRA_QT_PLUGINS="platforms;platformthemes;imageformats;iconengines"
+          
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage --verbosity=2
           mv *.AppImage $OUTPUT
 
       - name: Загрузка артефактов
