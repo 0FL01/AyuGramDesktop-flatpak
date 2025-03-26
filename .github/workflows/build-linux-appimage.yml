@@ -1,4 +1,4 @@
-name: Сборка Linux AppImage
+name: Сборка Linux бинарника
 
 on:
   push:
@@ -83,27 +83,16 @@ jobs:
             -D TDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }} \
             -D TDESKTOP_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
 
-      - name: Установка инструментов для AppImage
-        run: |
-          sudo apt-get install -y libfuse2
-          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -c https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
-
       - name: Проверка созданных файлов
         run: |
           find out -type f -name "Telegram" -o -name "AyuGram" | sort
           ls -la out/Release/ || true
           ls -la out/ || true
           ls -la out/bin/ || true
-
-      - name: Подготовка AppDir
-        run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
           
-          # Ищем исполняемый файл и копируем его
+      - name: Подготовка бинарного файла для загрузки
+        run: |
+          # Ищем исполняемый файл
           EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
           if [ -z "$EXECUTABLE" ]; then
             echo "Ошибка: исполняемый файл не найден!"
@@ -111,55 +100,24 @@ jobs:
           fi
           
           echo "Найден исполняемый файл: $EXECUTABLE"
-          cp "$EXECUTABLE" AppDir/usr/bin/Telegram
-          cp Telegram/Resources/art/icon512.png AppDir/usr/share/icons/hicolor/512x512/apps/telegram.png
           
-          cat > AppDir/usr/share/applications/telegram.desktop << EOL
-          [Desktop Entry]
-          Name=AyuGram
-          Comment=AyuGram Desktop Client
-          Exec=Telegram
-          Icon=telegram
-          Terminal=false
-          Type=Application
-          Categories=Network;InstantMessaging;Qt;
-          EOL
-
-      - name: Установка Qt для AppImage
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qtbase5-dev qtchooser qttools5-dev-tools libqt5gui5 libqt5core5a libqt5dbus5 libqt5widgets5 libqt5network5 libqt5svg5-dev
+          # Создаем папку для выходных файлов
+          mkdir -p release
           
-      - name: Отладка Qt
-        run: |
-          find /usr -name "qmake" -type f
-          find /usr -path "*/qt5/bin/qmake" -type f || true
-          which qmake
-          qmake --version
-          dpkg -l | grep qt
-
-      - name: Создание AppImage
-        run: |
-          export OUTPUT="AyuGram-$(git describe --tags --always)-x86_64.AppImage"
-          # Находим qmake в системе
-          export QMAKE=$(find /usr -name "qmake" -type f | grep -v qt4 | head -n 1)
-          echo "Используем qmake: $QMAKE"
+          # Копируем бинарник в папку release и переименовываем
+          cp "$EXECUTABLE" release/AyuGram-$(git describe --tags --always)-linux-x86_64
           
-          # Устанавливаем другие необходимые переменные Qt
-          export QML_SOURCES_PATHS="${PWD}/out/Release"
-          export EXTRA_QT_PLUGINS="platforms;platformthemes;imageformats;iconengines"
-          
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage --verbosity=2
-          mv *.AppImage $OUTPUT
+          # Показываем результат
+          ls -la release/
 
       - name: Загрузка артефактов
         uses: actions/upload-artifact@v4
         with:
-          name: AyuGram-AppImage
-          path: AyuGram-*-x86_64.AppImage
+          name: AyuGram-Linux
+          path: release/AyuGram-*-linux-x86_64
 
       - name: Публикация релиза
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: AyuGram-*-x86_64.AppImage 
+          files: release/AyuGram-*-linux-x86_64 
