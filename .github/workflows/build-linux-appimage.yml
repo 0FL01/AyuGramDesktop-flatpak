@@ -20,6 +20,19 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Установка Qt для AppImage
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qtbase5-dev qtchooser qttools5-dev-tools libqt5gui5 libqt5core5a libqt5dbus5 libqt5widgets5 libqt5network5 libqt5svg5-dev
+          
+      - name: Отладка Qt
+        run: |
+          find /usr -name "qmake" -type f
+          find /usr -path "*/qt5/bin/qmake" -type f || true
+          which qmake
+          qmake --version
+          dpkg -l | grep qt
+          
       - name: Отключение swap файла
         run: |
           # Отключаем и удаляем существующий swap
@@ -124,17 +137,6 @@ jobs:
           Type=Application
           Categories=Network;InstantMessaging;Qt;
           EOL
-
-      - name: Установка Qt для AppImage
-        run: |
-          sudo apt-get install -y qt5-default qtbase5-dev qttools5-dev-tools
-          
-      - name: Отладка Qt
-        run: |
-          find /usr -name "qmake" -type f
-          find /usr -path "*/qt5/bin/qmake" -type f
-          dpkg -l | grep qt
-          ls -la /usr/lib/qt5/bin/ || true
 
       - name: Создание AppImage
         run: |
