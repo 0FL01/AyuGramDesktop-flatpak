@@ -74,9 +74,19 @@ jobs:
           ./Telegram/build/prepare/linux.sh
           
           # Создаем директорию для Flatpak сборки
-          mkdir -p flatpak-build
-          chmod -R 777 flatpak-build
-
+          mkdir -p flatpak-build out
+          chmod -R 777 flatpak-build out
+          
+      - name: Сборка проекта
+        run: |
+          docker run --rm -i \
+            -v "$PWD:/usr/src/tdesktop" \
+            -u $(id -u):$(id -g) \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D TDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }} \
+            -D TDESKTOP_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            
       - name: Создание Flatpak манифеста
         run: |
           cat > org.telegram.AyuGram.yml << EOF
@@ -102,17 +112,46 @@ jobs:
             - --device=dri
           modules:
             - name: ayugram
-              buildsystem: cmake-ninja
-              builddir: true
-              config-opts:
-                - -DCMAKE_BUILD_TYPE=Release
-                - -DTDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }}
-                - -DTDESKTOP_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
-                - -DDESKTOP_APP_USE_PACKAGED=OFF
+              buildsystem: simple
+              build-commands:
+                - cp -r /usr/src/tdesktop/out/Release/. /app/
+                - mkdir -p /app/bin
+                - install -Dm755 ayugram /app/bin/AyuGram
+                - install -Dm644 AyuGram.desktop /app/share/applications/org.telegram.AyuGram.desktop
+                - install -Dm644 Telegram/Resources/art/icon512@2x.png /app/share/icons/hicolor/512x512/apps/org.telegram.AyuGram.png
               sources:
                 - type: dir
-                  path: .
+                  path: out/Release
           EOF
+          
+          # Создание desktop файла
+          cat > AyuGram.desktop << EOF
+          [Desktop Entry]
+          Name=AyuGram
+          Comment=Unofficial Telegram client with extra features
+          TryExec=AyuGram
+          Exec=AyuGram -- %u
+          Icon=org.telegram.AyuGram
+          Terminal=false
+          StartupWMClass=AyuGram
+          Type=Application
+          Categories=Network;InstantMessaging;Qt;
+          MimeType=x-scheme-handler/tg;
+          Keywords=tg;chat;im;messaging;messenger;sms;tdesktop;
+          EOF
+          
+          # Копируем desktop файл в директорию out/Release для использования при сборке Flatpak
+          mkdir -p out/Release
+          cp AyuGram.desktop out/Release/
+          
+          # Находим исполняемый файл и копируем его в out/Release с нужным именем
+          EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
+          if [ -n "$EXECUTABLE" ]; then
+            cp "$EXECUTABLE" out/Release/ayugram
+          else
+            echo "Исполняемый файл не найден!"
+            exit 1
+          fi
 
       - name: Сборка Flatpak пакета
         run: |
