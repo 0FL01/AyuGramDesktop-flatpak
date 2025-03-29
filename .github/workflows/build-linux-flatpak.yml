@@ -1,0 +1,147 @@
+name: Сборка Linux Flatpak
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверка репозитория
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Отключение swap файла
+        run: |
+          # Отключаем и удаляем существующий swap
+          sudo swapoff -a
+          sudo rm -f /swapfile
+          
+          # Проверим доступную память
+          free -h
+
+      - name: Освобождение места на диске
+        run: |
+          # Удаляем ненужные пакеты и образы
+          sudo apt-get remove -y '^ghc-.*' || true
+          sudo apt-get remove -y '^dotnet-.*' || true
+          sudo apt-get remove -y '^llvm-.*' || true
+          sudo apt-get remove -y 'php.*' || true
+          sudo apt-get remove -y azure-cli || true
+          sudo apt-get remove -y google-chrome-stable || true
+          sudo apt-get remove -y google-cloud-sdk || true
+          sudo apt-get remove -y firefox || true
+          sudo apt-get autoremove -y
+          sudo apt-get clean
+          
+          # Удаляем каталоги, занимающие много места
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          
+          # Удаляем кэши Docker
+          docker system prune -af
+          
+          # Показываем доступное пространство
+          df -h
+
+      - name: Установка зависимостей Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          
+          # Установка необходимых SDK и рантаймов
+          sudo flatpak install -y flathub org.freedesktop.Platform//22.08 org.freedesktop.Sdk//22.08
+
+      - name: Установка зависимостей проекта
+        run: |
+          sudo apt-get install -y curl python3 python3-pip
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Подготовка к сборке
+        run: |
+          ./Telegram/build/prepare/linux.sh
+          
+          # Создаем директорию для Flatpak сборки
+          mkdir -p flatpak-build
+          chmod -R 777 flatpak-build
+
+      - name: Создание Flatpak манифеста
+        run: |
+          cat > org.telegram.AyuGram.yml << EOF
+          app-id: org.telegram.AyuGram
+          runtime: org.freedesktop.Platform
+          runtime-version: '22.08'
+          sdk: org.freedesktop.Sdk
+          command: AyuGram
+          finish-args:
+            - --share=ipc
+            - --share=network
+            - --socket=x11
+            - --socket=wayland
+            - --socket=pulseaudio
+            - --filesystem=xdg-pictures
+            - --filesystem=xdg-download
+            - --filesystem=xdg-music
+            - --filesystem=xdg-videos
+            - --filesystem=xdg-documents
+            - --filesystem=~/.AyuGram:create
+            - --talk-name=org.freedesktop.Notifications
+            - --talk-name=org.kde.StatusNotifierWatcher
+            - --device=dri
+          modules:
+            - name: ayugram
+              buildsystem: cmake-ninja
+              builddir: true
+              config-opts:
+                - -DCMAKE_BUILD_TYPE=Release
+                - -DTDESKTOP_API_ID=${{ secrets.TELEGRAM_API_ID }}
+                - -DTDESKTOP_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+                - -DDESKTOP_APP_USE_PACKAGED=OFF
+              sources:
+                - type: dir
+                  path: .
+          EOF
+
+      - name: Сборка Flatpak пакета
+        run: |
+          flatpak-builder --repo=repo --force-clean flatpak-build org.telegram.AyuGram.yml
+          flatpak build-bundle repo AyuGram-$(git describe --tags --always)-linux-x86_64.flatpak org.telegram.AyuGram
+
+      - name: Проверка созданных файлов
+        run: |
+          ls -la *.flatpak || true
+          
+      - name: Подготовка файлов для загрузки
+        run: |
+          # Создаем папку для выходных файлов
+          mkdir -p release
+          
+          # Копируем flatpak в папку release
+          cp AyuGram-*.flatpak release/
+          
+          # Показываем результат
+          ls -la release/
+
+      - name: Загрузка артефактов
+        uses: actions/upload-artifact@v4
+        with:
+          name: AyuGram-Flatpak
+          path: release/AyuGram-*.flatpak
+
+      - name: Публикация релиза
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/AyuGram-*.flatpak 
