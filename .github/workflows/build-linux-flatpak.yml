@@ -89,12 +89,62 @@ jobs:
             
       - name: Создание Flatpak манифеста
         run: |
+          # Создаем desktop файл
+          cat > AyuGram.desktop << EOF
+          [Desktop Entry]
+          Name=AyuGram
+          Comment=Unofficial Telegram client with extra features
+          TryExec=AyuGram
+          Exec=AyuGram -- %u
+          Icon=org.telegram.AyuGram
+          Terminal=false
+          StartupWMClass=AyuGram
+          Type=Application
+          Categories=Network;InstantMessaging;Qt;
+          MimeType=x-scheme-handler/tg;
+          Keywords=tg;chat;im;messaging;messenger;sms;tdesktop;
+          EOF
+
+          # Подготавливаем директорию out/Release для Flatpak
+          mkdir -p out/Release
+          chmod -R 777 out/Release # Убедимся что права есть, хотя может и не нужно
+
+          # Копируем desktop файл
+          cp AyuGram.desktop out/Release/
+
+          # Находим исполняемый файл и копируем его в out/Release с нужным именем для Flatpak
+          EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
+          if [ -n "$EXECUTABLE" ]; then
+            echo "Найден исполняемый файл: $EXECUTABLE"
+            cp "$EXECUTABLE" out/Release/ayugram # Копируем с именем 'ayugram'
+            chmod +x out/Release/ayugram
+          else
+            echo "Исполняемый файл не найден!"
+            exit 1
+          fi
+
+          # Копируем иконку в out/Release, чтобы она попала в сборку Flatpak через sources
+          ICON_SOURCE="Telegram/Resources/art/icon512@2x.png"
+          if [ -f "$ICON_SOURCE" ]; then
+            echo "Копируем иконку: $ICON_SOURCE"
+            cp "$ICON_SOURCE" out/Release/icon512@2x.png # Имя файла иконки в out/Release
+          else
+            echo "Файл иконки не найден: $ICON_SOURCE"
+            # Можно либо завершить с ошибкой, либо продолжить без иконки
+            # exit 1
+          fi
+
+          # Проверяем содержимое out/Release перед созданием манифеста
+          echo "Содержимое out/Release:"
+          ls -la out/Release/
+
+          # Создаем Flatpak манифест
           cat > org.telegram.AyuGram.yml << EOF
           app-id: org.telegram.AyuGram
           runtime: org.freedesktop.Platform
           runtime-version: '22.08'
           sdk: org.freedesktop.Sdk
-          command: AyuGram
+          command: AyuGram # Эта команда будет запускать /app/bin/AyuGram
           finish-args:
             - --share=ipc
             - --share=network
@@ -114,44 +164,25 @@ jobs:
             - name: ayugram
               buildsystem: simple
               build-commands:
-                - cp -r /usr/src/tdesktop/out/Release/. /app/
-                - mkdir -p /app/bin
+                # Файлы из 'sources' (т.е. содержимое out/Release хоста) уже в корне ('./') сборочной среды Flatpak
+                # Удалена неверная команда cp /usr/src/tdesktop/out/Release
+                - mkdir -p /app/bin # Создаем директорию для бинарника
+                # Устанавливаем исполняемый файл из корня среды сборки (куда он был скопирован из out/Release/ayugram)
                 - install -Dm755 ayugram /app/bin/AyuGram
+                # Устанавливаем desktop файл из корня среды сборки (куда он был скопирован из out/Release/AyuGram.desktop)
                 - install -Dm644 AyuGram.desktop /app/share/applications/org.telegram.AyuGram.desktop
-                - install -Dm644 Telegram/Resources/art/icon512@2x.png /app/share/icons/hicolor/512x512/apps/org.telegram.AyuGram.png
+                # Устанавливаем иконку из корня среды сборки (куда она была скопирована из out/Release/icon512@2x.png)
+                - install -Dm644 icon512@2x.png /app/share/icons/hicolor/512x512/apps/org.telegram.AyuGram.png
               sources:
+                # Эта директива скопирует *содержимое* каталога out/Release хоста в корень ('/') среды сборки Flatpak
                 - type: dir
                   path: out/Release
           EOF
-          
-          # Создание desktop файла
-          cat > AyuGram.desktop << EOF
-          [Desktop Entry]
-          Name=AyuGram
-          Comment=Unofficial Telegram client with extra features
-          TryExec=AyuGram
-          Exec=AyuGram -- %u
-          Icon=org.telegram.AyuGram
-          Terminal=false
-          StartupWMClass=AyuGram
-          Type=Application
-          Categories=Network;InstantMessaging;Qt;
-          MimeType=x-scheme-handler/tg;
-          Keywords=tg;chat;im;messaging;messenger;sms;tdesktop;
-          EOF
-          
-          # Копируем desktop файл в директорию out/Release для использования при сборке Flatpak
-          mkdir -p out/Release
-          cp AyuGram.desktop out/Release/
-          
-          # Находим исполняемый файл и копируем его в out/Release с нужным именем
-          EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
-          if [ -n "$EXECUTABLE" ]; then
-            cp "$EXECUTABLE" out/Release/ayugram
-          else
-            echo "Исполняемый файл не найден!"
-            exit 1
-          fi
+
+          # Отобразим созданный манифест для отладки
+          echo "--- Содержимое org.telegram.AyuGram.yml ---"
+          cat org.telegram.AyuGram.yml
+          echo "----------------------------------------"
 
       - name: Сборка Flatpak пакета
         run: |
