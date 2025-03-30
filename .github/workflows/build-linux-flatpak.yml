@@ -123,23 +123,23 @@ jobs:
             exit 1
           fi
 
-          # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
-          # Указываем ТОЧНЫЙ путь к иконке 512x512 в вашем репозитории
-          ICON_SOURCE="Telegram/Telegram/Images.xcassets/Icon.iconset/icon_512x512.png" 
-          # Задаем целевое имя файла иконки, соответствующее App ID, для единообразия
-          ICON_DEST_NAME="org.telegram.AyuGram.png" 
+          # Указываем ТОЧНЫЙ путь к иконке в вашем репозитории
+          ICON_SOURCE=".github/AyuGram.png" 
+          # Задаем целевое имя файла иконки, соответствующее App ID
+          ICON_DEST_NAME="org.telegram.AyuGram.png"
 
           if [ -f "$ICON_SOURCE" ]; then
             echo "Копируем иконку: $ICON_SOURCE в out/Release/$ICON_DEST_NAME"
-            cp "$ICON_SOURCE" out/Release/"$ICON_DEST_NAME" # Копируем с новым именем
+            cp "$ICON_SOURCE" out/Release/"$ICON_DEST_NAME"
           else
             echo "Файл иконки не найден по пути: $ICON_SOURCE"
-            # Проверим, существует ли файл вообще
             echo "Проверка наличия файла:"
             ls -l "$ICON_SOURCE" || echo "Файл действительно отсутствует."
+            # Добавим вывод структуры папки .github для отладки, если файл не найден
+            echo "Содержимое папки .github/:"
+            ls -la .github/ || echo "Папка .github/ не найдена или пуста."
             exit 1 # Завершаем с ошибкой, так как иконка важна
           fi
-          # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
           # Проверяем содержимое out/Release перед созданием манифеста
           echo "Содержимое out/Release:"
