@@ -1,14 +1,6 @@
 name: Сборка Linux Flatpak
 
 on:
-  push:
-    tags:
-      - 'v*'
-    branches:
-      - dev
-  pull_request:
-    branches:
-      - dev
   workflow_dispatch:
 
 jobs:
@@ -107,32 +99,47 @@ jobs:
 
           # Подготавливаем директорию out/Release для Flatpak
           mkdir -p out/Release
-          chmod -R 777 out/Release # Убедимся что права есть, хотя может и не нужно
+          # Права 777 здесь избыточны и потенциально небезопасны, 
+          # достаточно чтобы пользователь runner имел доступ. 
+          # Оставляем для совместимости с вашим кодом, но можно убрать.
+          chmod -R 777 out/Release 
 
           # Копируем desktop файл
           cp AyuGram.desktop out/Release/
 
           # Находим исполняемый файл и копируем его в out/Release с нужным именем для Flatpak
-          EXECUTABLE=$(find out -type f -name "AyuGram" -o -name "Telegram" | head -n 1)
+          # Используем find в корне проекта, т.к. сборка идет туда
+          EXECUTABLE=$(find ./out -path '*/Release/AyuGram' -o -path '*/Release/Telegram' | head -n 1)
           if [ -n "$EXECUTABLE" ]; then
             echo "Найден исполняемый файл: $EXECUTABLE"
-            cp "$EXECUTABLE" out/Release/ayugram # Копируем с именем 'ayugram'
+            # Копируем с именем 'ayugram', которое будет использоваться внутри Flatpak
+            cp "$EXECUTABLE" out/Release/ayugram 
             chmod +x out/Release/ayugram
           else
-            echo "Исполняемый файл не найден!"
+            echo "Исполняемый файл не найден в ./out/*/Release/ !"
+            # Выведем структуру папки out для отладки
+            echo "Содержимое папки out:"
+            find ./out
             exit 1
           fi
 
-          # Копируем иконку в out/Release, чтобы она попала в сборку Flatpak через sources
-          ICON_SOURCE="Telegram/Resources/art/icon512@2x.png"
+          # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+          # Указываем ТОЧНЫЙ путь к иконке 512x512 в вашем репозитории
+          ICON_SOURCE="Telegram/Telegram/Images.xcassets/Icon.iconset/icon_512x512.png" 
+          # Задаем целевое имя файла иконки, соответствующее App ID, для единообразия
+          ICON_DEST_NAME="org.telegram.AyuGram.png" 
+
           if [ -f "$ICON_SOURCE" ]; then
-            echo "Копируем иконку: $ICON_SOURCE"
-            cp "$ICON_SOURCE" out/Release/icon512@2x.png # Имя файла иконки в out/Release
+            echo "Копируем иконку: $ICON_SOURCE в out/Release/$ICON_DEST_NAME"
+            cp "$ICON_SOURCE" out/Release/"$ICON_DEST_NAME" # Копируем с новым именем
           else
-            echo "Файл иконки не найден: $ICON_SOURCE"
-            # Можно либо завершить с ошибкой, либо продолжить без иконки
-            # exit 1
+            echo "Файл иконки не найден по пути: $ICON_SOURCE"
+            # Проверим, существует ли файл вообще
+            echo "Проверка наличия файла:"
+            ls -l "$ICON_SOURCE" || echo "Файл действительно отсутствует."
+            exit 1 # Завершаем с ошибкой, так как иконка важна
           fi
+          # --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
           # Проверяем содержимое out/Release перед созданием манифеста
           echo "Содержимое out/Release:"
@@ -156,27 +163,26 @@ jobs:
             - --filesystem=xdg-music
             - --filesystem=xdg-videos
             - --filesystem=xdg-documents
-            - --filesystem=~/.AyuGram:create
+            - --filesystem=~/.AyuGram:create # Директория для данных приложения
             - --talk-name=org.freedesktop.Notifications
             - --talk-name=org.kde.StatusNotifierWatcher
-            - --device=dri
+            - --device=dri # Доступ к графическому ускорению
           modules:
             - name: ayugram
               buildsystem: simple
               build-commands:
                 # Файлы из 'sources' (т.е. содержимое out/Release хоста) уже в корне ('./') сборочной среды Flatpak
-                # Удалена неверная команда cp /usr/src/tdesktop/out/Release
                 - mkdir -p /app/bin # Создаем директорию для бинарника
                 # Устанавливаем исполняемый файл из корня среды сборки (куда он был скопирован из out/Release/ayugram)
                 - install -Dm755 ayugram /app/bin/AyuGram
                 # Устанавливаем desktop файл из корня среды сборки (куда он был скопирован из out/Release/AyuGram.desktop)
                 - install -Dm644 AyuGram.desktop /app/share/applications/org.telegram.AyuGram.desktop
-                # Устанавливаем иконку из корня среды сборки (куда она была скопирована из out/Release/icon512@2x.png)
-                - install -Dm644 icon512@2x.png /app/share/icons/hicolor/512x512/apps/org.telegram.AyuGram.png
+                # Устанавливаем иконку 512x512 из корня среды сборки (куда она была скопирована из out/Release/org.telegram.AyuGram.png)
+                - install -Dm644 ${ICON_DEST_NAME} /app/share/icons/hicolor/512x512/apps/org.telegram.AyuGram.png
               sources:
                 # Эта директива скопирует *содержимое* каталога out/Release хоста в корень ('/') среды сборки Flatpak
                 - type: dir
-                  path: out/Release
+                  path: out/Release # Указываем путь к директории с бинарником, иконкой и desktop-файлом
           EOF
 
           # Отобразим созданный манифест для отладки

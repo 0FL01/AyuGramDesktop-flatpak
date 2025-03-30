@@ -1,14 +1,6 @@
 name: Сборка Linux бинарника
 
 on:
-  push:
-    tags:
-      - 'v*'
-    branches:
-      - dev
-  pull_request:
-    branches:
-      - dev
   workflow_dispatch:
 
 jobs:
