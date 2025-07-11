@@ -28,13 +28,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
 
-      # 3. Настройка репозитория Flathub
+      # 3. Настройка репозитория Flathub с правами администратора
       - name: Добавление репозитория Flathub
-        run: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        run: sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-      # 4. Установка KDE SDK и Platform для ускорения сборки
+      # 4. Установка KDE SDK и Platform для ускорения сборки с правами администратора
       - name: Установка KDE SDK и Platform
-        run: flatpak install -y flathub org.kde.Platform//6.7 org.kde.Sdk//6.7
+        run: sudo flatpak install -y flathub org.kde.Platform//6.7 org.kde.Sdk//6.7
 
       # 5. Сборка приложения с помощью flatpak-builder
       - name: Запуск сборки Flatpak
