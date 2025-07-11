@@ -4,7 +4,6 @@ app-id: com.ayugram.desktop
 runtime: org.kde.Platform
 runtime-version: '6.7'
 sdk: org.kde.Sdk
-sdk-version: '6.7'
 command: AyuGram
 finish-args:
   # Разрешения для графики и звука
@@ -38,7 +37,7 @@ modules:
     sources:
       - type: archive
         url: https://github.com/kcat/openal-soft/archive/refs/tags/1.23.1.tar.gz
-        sha256: 88031e38c8bf1445015523c58a7a38beb6a833e65e73a65510c88e2d2255854d
+        sha256: dfddf3a1f61059853c625b7bb03de8433b455f2f79f89548cbcbd5edca3d4a4a
 
   # Основной модуль приложения AyuGram
   - name: ayugram-desktop
