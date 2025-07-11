@@ -39,13 +39,25 @@ modules:
         url: https://github.com/kcat/openal-soft/archive/refs/tags/1.23.1.tar.gz
         sha256: dfddf3a1f61059853c625b7bb03de8433b455f2f79f89548cbcbd5edca3d4a4a
 
-  # Основной модуль приложения AyuGram
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'ada' (URL-парсер)
+  - name: ada
+    buildsystem: cmake-ninja
+    config-opts:
+      # Отключаем сборку тестов, они не нужны в релизе
+      - -DADA_BUILD_TESTS=OFF
+      # Собираем как разделяемую библиотеку
+      - -DBUILD_SHARED_LIBS=ON
+    sources:
+      - type: git
+        url: https://github.com/ada-url/ada.git
+        # Используем последний стабильный тег для надежности
+        tag: v2.8.1
+
+  # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
   - name: ayugram-desktop
-    # ИСПОЛЬЗУЕМ 'simple' для полного контроля над командами
     buildsystem: simple
-    # ЯВНО ПРОПИСЫВАЕМ ВСЕ ШАГИ СБОРКИ
     build-commands:
-      # 1. Рекурсивно инициализируем ВСЕ сабмодули, включая вложенные
+      # 1. Рекурсивно инициализируем ВСЕ сабмодули
       - git submodule update --init --recursive
       # 2. Запускаем CMake для конфигурации проекта
       - >
@@ -59,7 +71,6 @@ modules:
       - cmake --build build
       # 4. Устанавливаем собранное приложение в /app
       - cmake --install build
-    # Команды, выполняемые после установки
     post-install:
       # Установка .desktop файла для меню приложений
       - install -Dm644 lib/xdg/com.ayugram.desktop.desktop /app/share/applications/com.ayugram.desktop.desktop
@@ -73,6 +84,5 @@ modules:
       - type: git
         url: https://github.com/AyuGram/AyuGramDesktop.git
         branch: dev
-      # Локальные файлы из этого репозитория (XDG)
       - type: dir
         path: .
