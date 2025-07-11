@@ -64,7 +64,7 @@ modules:
         sha256: 46d9d2c06637b219270877c9e16155cbd015b6dc84349af064c088e9b5b12f7b
         dest-filename: boost.tar.bz2
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'protobuf'
+  # Зависимость 'protobuf'
   - name: protobuf
     buildsystem: cmake-ninja
     config-opts:
@@ -72,10 +72,17 @@ modules:
       - -Dprotobuf_BUILD_TESTS=OFF
       # Собираем как разделяемую библиотеку
       - -DBUILD_SHARED_LIBS=ON
+      # Явно указываем, что Abseil нужно найти и собрать как сабмодуль
+      - -Dprotobuf_ABSL_PROVIDER=module
     sources:
-      - type: archive
-        url: https://github.com/protocolbuffers/protobuf/releases/download/v25.3/protobuf-25.3.tar.gz
-        sha256: d19643d265b978383352b3143f04c0641eea75a75235c111cc01a1350173180e
+      # ИСПРАВЛЕНО: Переключаемся со скачивания архива на клонирование из Git
+      - type: git
+        url: https://github.com/protocolbuffers/protobuf.git
+        tag: v25.3
+        # Эта опция рекурсивно скачает все сабмодули, включая abseil-cpp
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([\d.]+)$
 
   # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
   - name: ayugram-desktop
