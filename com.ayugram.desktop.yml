@@ -51,7 +51,7 @@ modules:
       - type: git
         url: https://github.com/ada-url/ada.git
         # Используем последний стабильный тег для надежности
-        tag: v2.8.1
+        tag: v3.2.5
 
   # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
   - name: ayugram-desktop
