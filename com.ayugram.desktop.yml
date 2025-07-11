@@ -54,32 +54,86 @@ modules:
   - name: boost
     buildsystem: simple
     build-commands:
-      # Устанавливаем в стандартный префикс /app
       - ./bootstrap.sh --prefix=/app --with-libraries=regex
       - ./b2 install
     sources:
       - type: archive
         url: https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
-        # Использую ваш актуальный хеш
         sha256: 46d9d2c06637b219270877c9e16155cbd015b6dc84349af064c088e9b5b12f7b
         dest-filename: boost.tar.bz2
 
-  # Зависимость 'protobuf'
-  - name: protobuf
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'rnnoise' (шумоподавление)
+  - name: rnnoise
+    buildsystem: autotools
+    sources:
+      - type: git
+        url: https://github.com/xiph/rnnoise.git
+        tag: v0.2
+
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'minizip' (архиватор)
+  - name: minizip-ng
     buildsystem: cmake-ninja
     config-opts:
-      # Отключаем сборку тестов, они не нужны в релизе
+      - -DMZ_BUILD_TESTS=OFF
+      - -DMZ_BUILD_PKGCONFIG=ON
+    sources:
+      - type: git
+        url: https://github.com/zlib-ng/minizip-ng.git
+        tag: 4.0.8
+
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'aom' (кодек для AVIF)
+  - name: aom
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=OFF
+      - -DENABLE_EXAMPLES=OFF
+      - -DENABLE_TOOLS=OFF
+      - -DBUILD_SHARED_LIBS=1
+    sources:
+      - type: git
+        url: https://aomedia.googlesource.com/aom
+        tag: v3.9.1
+
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'libavif' (формат изображений)
+  - name: libavif
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DAVIF_CODEC_AOM=ON
+      - -DAVIF_BUILD_EXAMPLES=OFF
+      - -DAVIF_BUILD_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/AOMediaCodec/libavif.git
+        tag: v1.1.1
+
+  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'libjxl' (формат изображений JPEG XL)
+  - name: libjxl
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DBUILD_TESTING=OFF
+      - -DLIBJXL_ENABLE_EXAMPLES=OFF
+      - -DLIBJXL_ENABLE_TOOLS=OFF
+      - -DLIBJXL_ENABLE_MANPAGES=OFF
+    sources:
+      - type: git
+        url: https://github.com/libjxl/libjxl.git
+        tag: v0.10.2
+
+  # Зависимость 'protobuf'
+  - name: protobuf
+    # ИСПРАВЛЕНО: Добавляем расширение SDK с компилятором Clang
+    build-options:
+      sdk-extensions:
+        - org.freedesktop.Sdk.Extension.clang16
+    buildsystem: cmake-ninja
+    config-opts:
       - -Dprotobuf_BUILD_TESTS=OFF
-      # Собираем как разделяемую библиотеку
       - -DBUILD_SHARED_LIBS=ON
-      # Явно указываем, что Abseil нужно найти и собрать как сабмодуль
       - -Dprotobuf_ABSL_PROVIDER=module
     sources:
-      # ИСПРАВЛЕНО: Переключаемся со скачивания архива на клонирование из Git
       - type: git
         url: https://github.com/protocolbuffers/protobuf.git
         tag: v25.3
-        # Эта опция рекурсивно скачает все сабмодули, включая abseil-cpp
         x-checker-data:
           type: git
           tag-pattern: ^v([\d.]+)$
@@ -88,9 +142,7 @@ modules:
   - name: ayugram-desktop
     buildsystem: simple
     build-commands:
-      # 1. Рекурсивно инициализируем ВСЕ сабмодули
       - git submodule update --init --recursive
-      # 2. Запускаем CMake для конфигурации проекта
       - >
         cmake -G Ninja -B build -S .
         -DCMAKE_BUILD_TYPE=Release
@@ -99,18 +151,12 @@ modules:
         -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
         -DCMAKE_INSTALL_PREFIX=/app
         -DBoost_ROOT=/app
-      # 3. Собираем проект с помощью Ninja
       - cmake --build build
-      # 4. Устанавливаем собранное приложение в /app
       - cmake --install build
     post-install:
-      # Установка .desktop файла для меню приложений
       - install -Dm644 lib/xdg/com.ayugram.desktop.desktop /app/share/applications/com.ayugram.desktop.desktop
-      # Установка метаинформации для центров приложений (AppStream)
       - install -Dm644 lib/xdg/com.ayugram.desktop.metainfo.xml /app/share/metainfo/com.ayugram.desktop.metainfo.xml
-      # Установка иконки приложения
       - install -Dm644 .github/AyuGram.png /app/share/icons/hicolor/512x512/apps/com.ayugram.desktop.png
-      # Установка сервиса D-Bus
       - install -Dm644 lib/xdg/com.ayugram.desktop.service /app/share/dbus-1/services/com.ayugram.desktop.service
     sources:
       - type: git
