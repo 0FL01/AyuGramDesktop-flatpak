@@ -60,7 +60,8 @@ modules:
     sources:
       - type: archive
         url: https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.bz2
-        sha256: 2b66a23e826a0a760923855884a7a6415c5253392533a88171a5bf69a37dc883
+        # ИСПРАВЛЕНО: Обновлена контрольная сумма на актуальную из лога ошибки
+        sha256: e0f020de72913559199b5698b1f50a733dcfd7e1b0532de4a2357c3baca95e0f
         dest-filename: boost.tar.bz2
 
   # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
