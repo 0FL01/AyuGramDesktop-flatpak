@@ -59,9 +59,10 @@ modules:
       - ./b2 install
     sources:
       - type: archive
-        url: https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.bz2
-        # ИСПРАВЛЕНО: Обновлена контрольная сумма на актуальную из лога ошибки
-        sha256: e0f020de72913559199b5698b1f50a733dcfd7e1b0532de4a2357c3baca95e0f
+        # ИСПОЛЬЗУЕМ АКТУАЛЬНУЮ ВЕРСИЮ 1.88.0
+        url: https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
+        # ОБНОВЛЕНА КОНТРОЛЬНАЯ СУММА для архива с исходным кодом
+        sha256: b4318597c852234e4186a2a2a8e193a8191772a54174d3a9115151b243933b95
         dest-filename: boost.tar.bz2
 
   # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
