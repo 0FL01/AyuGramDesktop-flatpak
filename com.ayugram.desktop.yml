@@ -62,15 +62,20 @@ modules:
         sha256: 46d9d2c06637b219270877c9e16155cbd015b6dc84349af064c088e9b5b12f7b
         dest-filename: boost.tar.bz2
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'rnnoise' (шумоподавление)
+  # Зависимость 'rnnoise' (шумоподавление)
   - name: rnnoise
     buildsystem: autotools
     sources:
+      # Первый источник - сам код библиотеки
       - type: git
         url: https://github.com/xiph/rnnoise.git
         tag: v0.2
+      # ИСПРАВЛЕНО: Второй источник - файл с данными, который скрипт пытался скачать
+      - type: archive
+        url: https://media.xiph.org/rnnoise/models/rnnoise_data-0b50c45.tar.gz
+        sha256: 15736d8096634234a3d5254d9c60c28865e7637f255885e53dd8340835b55104
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'minizip' (архиватор)
+  # Зависимость 'minizip' (архиватор)
   - name: minizip-ng
     buildsystem: cmake-ninja
     config-opts:
@@ -81,7 +86,7 @@ modules:
         url: https://github.com/zlib-ng/minizip-ng.git
         tag: 4.0.8
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'aom' (кодек для AVIF)
+  # Зависимость 'aom' (кодек для AVIF)
   - name: aom
     buildsystem: cmake-ninja
     config-opts:
@@ -94,7 +99,7 @@ modules:
         url: https://aomedia.googlesource.com/aom
         tag: v3.9.1
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'libavif' (формат изображений)
+  # Зависимость 'libavif' (формат изображений)
   - name: libavif
     buildsystem: cmake-ninja
     config-opts:
@@ -106,7 +111,7 @@ modules:
         url: https://github.com/AOMediaCodec/libavif.git
         tag: v1.1.1
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'libjxl' (формат изображений JPEG XL)
+  # Зависимость 'libjxl' (формат изображений JPEG XL)
   - name: libjxl
     buildsystem: cmake-ninja
     config-opts:
@@ -121,7 +126,6 @@ modules:
 
   # Зависимость 'protobuf'
   - name: protobuf
-    # ИСПРАВЛЕНО: Добавляем расширение SDK с компилятором Clang
     build-options:
       sdk-extensions:
         - org.freedesktop.Sdk.Extension.clang16
