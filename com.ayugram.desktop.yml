@@ -70,10 +70,13 @@ modules:
       - type: git
         url: https://github.com/xiph/rnnoise.git
         tag: v0.2
-      # ИСПРАВЛЕНО: Второй источник - файл с данными, который скрипт пытался скачать
+      # Второй источник - файл с данными
       - type: archive
         url: https://media.xiph.org/rnnoise/models/rnnoise_data-0b50c45.tar.gz
-        sha256: 4ac81c5c0884ec4bd5907026aaae16209b7b76cd9d7f71af582094a2f98f4b43
+        sha256: 15736d8096634234a3d5254d9c60c28865e7637f255885e53dd8340835b55104
+      # ИСПРАВЛЕНО: Третий источник - наш патч, который отключает скачивание
+      - type: patch
+        path: rnnoise-disable-download.patch
 
   # Зависимость 'minizip' (архиватор)
   - name: minizip-ng

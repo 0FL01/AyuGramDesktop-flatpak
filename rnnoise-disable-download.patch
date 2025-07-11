@@ -1,0 +1,12 @@
+--- a/autogen.sh
++++ b/autogen.sh
+@@ -1,7 +1,7 @@
+ #!/bin/sh
+-echo "Downloading latest model"
+-wget https://media.xiph.org/rnnoise/models/rnnoise_data-0b50c45.tar.gz
++# Закомментировано, так как flatpak-builder скачивает это сам
++#echo "Downloading latest model"
++#wget https://media.xiph.org/rnnoise/models/rnnoise_data-0b50c45.tar.gz
+ tar xf rnnoise_data-0b50c45.tar.gz
+ autoreconf -if
+ 
