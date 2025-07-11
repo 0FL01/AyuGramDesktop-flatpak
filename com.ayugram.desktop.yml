@@ -41,13 +41,24 @@ modules:
 
   # Основной модуль приложения AyuGram
   - name: ayugram-desktop
-    buildsystem: cmake-ninja
-    # Опции конфигурации для CMake
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DDESKTOP_APP_USE_PACKAGED=ON
-      - -DTDESKTOP_API_ID=2040
-      - -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
+    # ИСПОЛЬЗУЕМ 'simple' для полного контроля над командами
+    buildsystem: simple
+    # ЯВНО ПРОПИСЫВАЕМ ВСЕ ШАГИ СБОРКИ
+    build-commands:
+      # 1. Рекурсивно инициализируем ВСЕ сабмодули, включая вложенные
+      - git submodule update --init --recursive
+      # 2. Запускаем CMake для конфигурации проекта
+      - >
+        cmake -G Ninja -B build -S .
+        -DCMAKE_BUILD_TYPE=Release
+        -DDESKTOP_APP_USE_PACKAGED=ON
+        -DTDESKTOP_API_ID=2040
+        -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
+        -DCMAKE_INSTALL_PREFIX=/app
+      # 3. Собираем проект с помощью Ninja
+      - cmake --build build
+      # 4. Устанавливаем собранное приложение в /app
+      - cmake --install build
     # Команды, выполняемые после установки
     post-install:
       # Установка .desktop файла для меню приложений
@@ -59,136 +70,9 @@ modules:
       # Установка сервиса D-Bus
       - install -Dm644 lib/xdg/com.ayugram.desktop.service /app/share/dbus-1/services/com.ayugram.desktop.service
     sources:
-      # Основной репозиторий AyuGram
       - type: git
         url: https://github.com/AyuGram/AyuGramDesktop.git
         branch: dev
       # Локальные файлы из этого репозитория (XDG)
       - type: dir
         path: .
-
-      # --- Сабмодули из .gitmodules с корректными коммитами ---
-      - type: git
-        path: Telegram/ThirdParty/GSL
-        url: https://github.com/Microsoft/GSL.git
-        commit: f0e1733993767f1445083643a357e837659d7a90
-      - type: git
-        path: Telegram/ThirdParty/xxHash
-        url: https://github.com/Cyan4973/xxHash.git
-        commit: bbb27a5efb85b92a0486cf361a8635715a53f6ba
-      - type: git
-        path: Telegram/ThirdParty/rlottie
-        url: https://github.com/desktop-app/rlottie.git
-        commit: 8c69fc20cf2e150db304311f1233a4b55a8892d7
-      - type: git
-        path: Telegram/ThirdParty/lz4
-        url: https://github.com/lz4/lz4.git
-        commit: 5ff839680134437dbf4678f3d0c7b371d84f4964
-      - type: git
-        path: Telegram/lib_crl
-        url: https://github.com/desktop-app/lib_crl.git
-        commit: c1d6b0273653095b10b4d0f4f7c30b614b690fd5
-      - type: git
-        path: Telegram/lib_rpl
-        url: https://github.com/desktop-app/lib_rpl.git
-        commit: 9a3ce435f4054e6cbd45e1c6e3e27cfff515c829
-      - type: git
-        path: Telegram/lib_base
-        url: https://github.com/desktop-app/lib_base.git
-        commit: 402034cba675220647c5e2041f38cf9d977d496e
-      - type: git
-        path: Telegram/codegen
-        url: https://github.com/AyuGram/codegen.git
-        commit: 5a0421e4623f6e2da58620f3818ae19df9309b43
-      - type: git
-        path: Telegram/lib_ui
-        url: https://github.com/AyuGram/lib_ui.git
-        commit: 7dae77ff08c60c30eb4c23abad2135760d9f07fb
-      - type: git
-        path: Telegram/lib_lottie
-        url: https://github.com/desktop-app/lib_lottie.git
-        commit: 4fc3ac0ea52f271cc9b108481f83d56fd76ab0ed
-      - type: git
-        path: Telegram/lib_tl
-        url: https://github.com/AyuGram/lib_tl.git
-        commit: 79243fd193159382c204dde76d87584ed83ad06b
-      - type: git
-        path: Telegram/lib_spellcheck
-        url: https://github.com/desktop-app/lib_spellcheck
-        commit: c8ded8b7585f8819780ea22a40c237625aec0c75
-      - type: git
-        path: Telegram/lib_storage
-        url: https://github.com/desktop-app/lib_storage.git
-        commit: ccdc72548a5065b5991b4e06e610d76bc4f6023e
-      - type: git
-        path: cmake
-        url: https://github.com/desktop-app/cmake_helpers.git
-        commit: b032f270b622610ca3f42a83f37b3a183c9da0da
-      - type: git
-        path: Telegram/ThirdParty/expected
-        url: https://github.com/TartanLlama/expected
-        commit: 292eff8bd8ee230a7df1d6a1c00c4ea0eb2f0362
-      - type: git
-        path: Telegram/ThirdParty/QR
-        url: https://github.com/nayuki/QR-Code-generator
-        commit: 720f62bddb7226106071d4728c292cb1df519ceb
-      - type: git
-        path: Telegram/lib_qr
-        url: https://github.com/desktop-app/lib_qr.git
-        commit: 6fdf60461444ba150e13ac36009c0ffce72c4c83
-      - type: git
-        path: Telegram/ThirdParty/hunspell
-        url: https://github.com/hunspell/hunspell
-        commit: 22c3381e2066bed616250d373fc5c935598b564a
-      - type: git
-        path: Telegram/ThirdParty/range-v3
-        url: https://github.com/ericniebler/range-v3.git
-        commit: a81477931a8aa2ad025c6bda0609f38e09e4d7ec
-      - type: git
-        path: Telegram/ThirdParty/nimf
-        url: https://github.com/hamonikr/nimf.git
-        commit: 498ec7ffab3ac140c2469638a14451788f03e798
-      - type: git
-        path: Telegram/ThirdParty/hime
-        url: https://github.com/hime-ime/hime.git
-        commit: 9b3e6f9ab59d1fe4d9de73d3bf0fed7789f921c5
-      - type: git
-        path: Telegram/ThirdParty/fcitx5-qt
-        url: https://github.com/fcitx/fcitx5-qt.git
-        commit: c743b12e6780edf1dcfe9071531c80f050cacb95
-      - type: git
-        path: Telegram/lib_webrtc
-        url: https://github.com/desktop-app/lib_webrtc.git
-        commit: e44439ed95559bfb4730db65f954937e149b7199
-      - type: git
-        path: Telegram/ThirdParty/tgcalls
-        url: https://github.com/TelegramMessenger/tgcalls.git
-        commit: 1348de6aa6c07ed32354d3e26423c45304000a39
-      - type: git
-        path: Telegram/lib_webview
-        url: https://github.com/desktop-app/lib_webview.git
-        commit: 04c45d069fc0088740b9637bc5da414ee82be198
-      - type: git
-        path: Telegram/ThirdParty/dispatch
-        url: https://github.com/apple/swift-corelibs-libdispatch
-        commit: 886ca22f659c53dae66a40ee8266c7aae9bb97cd
-      - type: git
-        path: Telegram/ThirdParty/kimageformats
-        url: https://github.com/KDE/kimageformats.git
-        commit: df82311a1081e576c4ac020204578bb8a81b21ec
-      - type: git
-        path: Telegram/ThirdParty/kcoreaddons
-        url: https://github.com/KDE/kcoreaddons.git
-        commit: fd84da51b554eac25e35b1e3f373edaab3029b15
-      - type: git
-        path: Telegram/ThirdParty/cld3
-        url: https://github.com/google/cld3.git
-        commit: b48dc46512566f5a2d41118c8c1116c4f96dc661
-      - type: git
-        path: Telegram/ThirdParty/libprisma
-        url: https://github.com/desktop-app/libprisma.git
-        commit: 23b0d70f9709da9b38561d5706891a134d18df76
-      - type: git
-        path: Telegram/ThirdParty/xdg-desktop-portal
-        url: https://github.com/flatpak/xdg-desktop-portal.git
-        commit: 11c8a96b147aeae70e3f770313f93b367d53fedd
