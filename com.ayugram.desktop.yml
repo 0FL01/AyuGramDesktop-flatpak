@@ -39,19 +39,29 @@ modules:
         url: https://github.com/kcat/openal-soft/archive/refs/tags/1.23.1.tar.gz
         sha256: dfddf3a1f61059853c625b7bb03de8433b455f2f79f89548cbcbd5edca3d4a4a
 
-  # ДОБАВЛЕН МОДУЛЬ: Зависимость 'ada' (URL-парсер)
+  # Зависимость 'ada' (URL-парсер)
   - name: ada
     buildsystem: cmake-ninja
     config-opts:
-      # Отключаем сборку тестов, они не нужны в релизе
       - -DADA_BUILD_TESTS=OFF
-      # Собираем как разделяемую библиотеку
       - -DBUILD_SHARED_LIBS=ON
     sources:
       - type: git
         url: https://github.com/ada-url/ada.git
-        # Используем последний стабильный тег для надежности
         tag: v3.2.5
+
+  # Зависимость 'boost'
+  - name: boost
+    buildsystem: simple
+    build-commands:
+      # Устанавливаем в стандартный префикс /app
+      - ./bootstrap.sh --prefix=/app --with-libraries=regex
+      - ./b2 install
+    sources:
+      - type: archive
+        url: https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.bz2
+        sha256: 2b66a23e826a0a760923855884a7a6415c5253392533a88171a5bf69a37dc883
+        dest-filename: boost.tar.bz2
 
   # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
   - name: ayugram-desktop
@@ -67,6 +77,7 @@ modules:
         -DTDESKTOP_API_ID=2040
         -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
         -DCMAKE_INSTALL_PREFIX=/app
+        -DBoost_ROOT=/app
       # 3. Собираем проект с помощью Ninja
       - cmake --build build
       # 4. Устанавливаем собранное приложение в /app
