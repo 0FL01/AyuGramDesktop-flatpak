@@ -71,7 +71,7 @@ modules:
       - type: git
         path: Telegram/ThirdParty/GSL
         url: https://github.com/Microsoft/GSL.git
-        commit: 87f9d768866548b5b86e72be66c60c5abd4d9b37
+        commit: f0e1733993767f1445083643a357e837659d7a90
       - type: git
         path: Telegram/ThirdParty/xxHash
         url: https://github.com/Cyan4973/xxHash.git
