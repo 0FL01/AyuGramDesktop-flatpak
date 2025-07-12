@@ -494,7 +494,20 @@ RUN \
 	&& cd ../qtwayland \
 	&& find ../../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git apply \
 	&& cd .. \
-	&& cmake -B build . -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=OFF -DQT_QPA_PLATFORMS="wayland;xcb" -DINPUT_libpng=qt -DINPUT_harfbuzz=qt -DINPUT_pcre=qt -DFEATURE_icu=OFF -DFEATURE_xcb_sm=OFF -DFEATURE_eglfs=OFF -DINPUT_dbus=runtime -DINPUT_openssl=linked \
+	&& cmake -B build . \
+		-DCMAKE_INSTALL_PREFIX=/usr/local \
+		-DBUILD_SHARED_LIBS=OFF \
+		-DQT_QPA_PLATFORMS="wayland;xcb" \
+		-DINPUT_libpng=qt \
+		-DINPUT_harfbuzz=qt \
+		-DINPUT_pcre=qt \
+		-DFEATURE_icu=OFF \
+		-DFEATURE_xcb_sm=OFF \
+		-DFEATURE_eglfs=OFF \
+		-DINPUT_dbus=runtime \
+		-DINPUT_openssl=linked \
+		-DFEATURE_precompile_header=OFF \
+		-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
 	&& cmake --build build \
 	&& cmake --install build \
 	&& cd .. \
