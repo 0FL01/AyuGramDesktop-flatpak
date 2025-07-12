@@ -1,173 +1,62 @@
-# Манифест для сборки Flatpak-пакета AyuGram Desktop
-# Определяет все зависимости, источники и шаги сборки.
+# Идентификатор приложения
 app-id: com.ayugram.desktop
+
+# Среда выполнения и SDK от KDE, т.к. они содержат много полезных зависимостей
 runtime: org.kde.Platform
-runtime-version: '6.7'
+runtime-version: '6.9'
 sdk: org.kde.Sdk
-command: AyuGram
+
+# Команда для запуска
+command: ayugram-desktop
+
+# Настройка песочницы
 finish-args:
-  # Разрешения для графики и звука
-  - --share=ipc
-  - --socket=x11
+  # --- Переменные окружения ---
+  - --env=LD_LIBRARY_PATH=/app/lib
+  - --env=PATH=/app/bin:/app/lib/webkit2gtk-4.0:/usr/bin
+  - --env=XDG_DATA_DIRS=/app/share:/usr/share
+  
+  # --- Доступ к сокетам ---
+  - --socket=fallback-x11
   - --socket=wayland
   - --socket=pulseaudio
-  - --device=dri
-  # Доступ к сети
-  - --share=network
-  # Доступ к файлам через порталы
-  - --filesystem=xdg-download
-  # Интеграция с рабочим столом через порталы
-  - --talk-name=org.freedesktop.portal.Desktop
-  - --talk-name=org.freedesktop.portal.Documents
-  - --talk-name=org.freedesktop.portal.Fcitx
-  - --talk-name=org.freedesktop.secrets
-  - --talk-name=org.freedesktop.Notifications
-  # D-Bus активация
+
+  # --- Доступ к системным службам (D-Bus) ---
   - --own-name=com.ayugram.desktop
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher 
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.OpenURI
+  - --talk-name=org.freedesktop.portal.FileChooser
+
+  # --- Прочие разрешения ---
+  - --share=ipc
+  - --device=dri
+  - --share=network
+  - --filesystem=xdg-download
+
+# Модули для сборки
 modules:
-  # Зависимость для аудио
-  - name: openal-soft
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DALSOFT_UTILS=OFF
-      - -DALSOFT_EXAMPLES=OFF
-      - -DALSOFT_TESTS=OFF
-      - -DALSOFT_BACKEND_PIPEWIRE=ON
-      - -DALSOFT_BACKEND_PULSEAUDIO=ON
-    sources:
-      - type: archive
-        url: https://github.com/kcat/openal-soft/archive/refs/tags/1.23.1.tar.gz
-        sha256: dfddf3a1f61059853c625b7bb03de8433b455f2f79f89548cbcbd5edca3d4a4a
-
-  # Зависимость 'ada' (URL-парсер)
-  - name: ada
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DADA_BUILD_TESTS=OFF
-      - -DBUILD_SHARED_LIBS=ON
-    sources:
-      - type: git
-        url: https://github.com/ada-url/ada.git
-        tag: v3.2.5
-
-  # Зависимость 'boost'
-  - name: boost
+  - name: ayugram-repack
     buildsystem: simple
     build-commands:
-      - ./bootstrap.sh --prefix=/app --with-libraries=regex
-      - ./b2 install
-    sources:
-      - type: archive
-        url: https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
-        sha256: 46d9d2c06637b219270877c9e16155cbd015b6dc84349af064c088e9b5b12f7b
-        dest-filename: boost.tar.bz2
 
-  # Зависимость 'rnnoise' (шумоподавление)
-  - name: rnnoise
-    buildsystem: autotools
-    sources:
-      # Первый источник - сам код библиотеки
-      - type: git
-        url: https://github.com/xiph/rnnoise.git
-        tag: v0.2
-      # Второй источник - файл с данными
-      - type: archive
-        url: https://media.xiph.org/rnnoise/models/rnnoise_data-0b50c45.tar.gz
-        sha256: 4ac81c5c0884ec4bd5907026aaae16209b7b76cd9d7f71af582094a2f98f4b43
-      # ИСПРАВЛЕНО: Третий источник - наш патч, который отключает скачивание
-      - type: patch
-        path: rnnoise-disable-download.patch
+      - sed -i 's|^Exec=.*|Exec=/app/bin/ayugram-desktop -- %%u|' ayugram-desktop/usr/share/applications/com.ayugram.desktop.desktop
+      - sed -i 's|^Exec=.*|Exec=/app/bin/ayugram-desktop|' ayugram-desktop/usr/share/dbus-1/services/com.ayugram.desktop.service
+      # Создаем директорию /app/lib внутри контейнера
+      - install -d /app/lib/
+      # Создаем директорию для общих ресурсов (иконки, .desktop файлы)
+      - install -d /app/share/
+      
+      # Копируем все наши библиотеки и их поддиректории в /app/lib
+      # Флаг -a (archive) важен для сохранения символических ссылок
+      - cp -a bundled-libs/* /app/lib/
+      
+      # Копируем само приложение и его ресурсы
+      - install -Dm755 ayugram-desktop/usr/bin/ayugram-desktop /app/bin/ayugram-desktop
+      - cp -a ayugram-desktop/usr/share/* /app/share/
 
-  # Зависимость 'minizip' (архиватор)
-  - name: minizip-ng
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DMZ_BUILD_TESTS=OFF
-      - -DMZ_BUILD_PKGCONFIG=ON
+    # Источник - вся текущая директория
     sources:
-      - type: git
-        url: https://github.com/zlib-ng/minizip-ng.git
-        tag: 4.0.8
-
-  # Зависимость 'aom' (кодек для AVIF)
-  - name: aom
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DENABLE_TESTS=OFF
-      - -DENABLE_EXAMPLES=OFF
-      - -DENABLE_TOOLS=OFF
-      - -DBUILD_SHARED_LIBS=1
-    sources:
-      - type: git
-        url: https://aomedia.googlesource.com/aom
-        tag: v3.9.1
-
-  # Зависимость 'libavif' (формат изображений)
-  - name: libavif
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DAVIF_CODEC_AOM=ON
-      - -DAVIF_BUILD_EXAMPLES=OFF
-      - -DAVIF_BUILD_TESTS=OFF
-    sources:
-      - type: git
-        url: https://github.com/AOMediaCodec/libavif.git
-        tag: v1.1.1
-
-  # Зависимость 'libjxl' (формат изображений JPEG XL)
-  - name: libjxl
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DBUILD_TESTING=OFF
-      - -DLIBJXL_ENABLE_EXAMPLES=OFF
-      - -DLIBJXL_ENABLE_TOOLS=OFF
-      - -DLIBJXL_ENABLE_MANPAGES=OFF
-    sources:
-      - type: git
-        url: https://github.com/libjxl/libjxl.git
-        tag: v0.10.2
-
-  # Зависимость 'protobuf'
-  - name: protobuf
-    build-options:
-      sdk-extensions:
-        - org.freedesktop.Sdk.Extension.clang16
-    buildsystem: cmake-ninja
-    config-opts:
-      - -Dprotobuf_BUILD_TESTS=OFF
-      - -DBUILD_SHARED_LIBS=ON
-      - -Dprotobuf_ABSL_PROVIDER=module
-    sources:
-      - type: git
-        url: https://github.com/protocolbuffers/protobuf.git
-        tag: v25.3
-        x-checker-data:
-          type: git
-          tag-pattern: ^v([\d.]+)$
-
-  # ПРИМЕЧАНИЕ: Этот модуль должен идти ПОСЛЕ всех своих зависимостей
-  - name: ayugram-desktop
-    buildsystem: simple
-    build-commands:
-      - git submodule update --init --recursive
-      - >
-        cmake -G Ninja -B build -S .
-        -DCMAKE_BUILD_TYPE=Release
-        -DDESKTOP_APP_USE_PACKAGED=ON
-        -DTDESKTOP_API_ID=2040
-        -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
-        -DCMAKE_INSTALL_PREFIX=/app
-        -DBoost_ROOT=/app
-      - cmake --build build
-      - cmake --install build
-    post-install:
-      - install -Dm644 lib/xdg/com.ayugram.desktop.desktop /app/share/applications/com.ayugram.desktop.desktop
-      - install -Dm644 lib/xdg/com.ayugram.desktop.metainfo.xml /app/share/metainfo/com.ayugram.desktop.metainfo.xml
-      - install -Dm644 .github/AyuGram.png /app/share/icons/hicolor/512x512/apps/com.ayugram.desktop.png
-      - install -Dm644 lib/xdg/com.ayugram.desktop.service /app/share/dbus-1/services/com.ayugram.desktop.service
-    sources:
-      - type: git
-        url: https://github.com/AyuGram/AyuGramDesktop.git
-        branch: dev
       - type: dir
         path: .

@@ -1,0 +1,109 @@
+name: Build AyuGram and Package Flatpak
+
+on:
+  # Запускать при пуше в ветку dev
+  push:
+    branches:
+      - dev
+  # Позволяет запускать workflow вручную из интерфейса GitHub
+  workflow_dispatch:
+
+jobs:
+  # Единственное задание, которое будет выполнять все шаги
+  build-and-package-flatpak:
+    # Запускаем на последней версии Ubuntu, предоставляемой GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      # Шаг 1: Клонирование репозитория
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Крайне важно: клонируем репозиторий вместе со всеми подмодулями
+          submodules: 'recursive'
+
+      # Шаг 2: Освобождение места на диске раннера
+      # Этот шаг критичен для сборок с большими Docker-образами
+      - name: Free up disk space on runner
+        run: |
+          echo "Дисковое пространство до очистки:"
+          df -h
+          
+          # Отключаем и удаляем swap-файл
+          sudo swapoff -a
+          sudo rm -f /swapfile
+          
+          # Удаляем большие директории с инструментами, не нужными для сборки
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android
+          
+          # Очищаем Docker-образы, которые могли быть предустановлены
+          # Это освободит место перед скачиванием нашего большого образа
+          docker image prune -a -f
+          
+          echo "Дисковое пространство после очистки:"
+          df -h
+
+      # Шаг 3: Установка Python и Poetry
+      - name: Setup Python and Poetry
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Poetry
+        run: pip install poetry
+
+      # Шаг 4: Подготовка сборочного окружения
+      - name: Prepare build environment
+        run: ./tdesktop/Telegram/build/prepare/linux.sh
+        working-directory: ./tdesktop
+
+      # Шаг 5: Сборка AyuGram с помощью Docker
+      - name: Build AyuGram binary
+        run: |
+          docker run --rm -i \
+              -u $(id -u) \
+              -v "$PWD:/usr/src/tdesktop" \
+              ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+              -D TDESKTOP_API_ID=${{ secrets.API_ID }} \
+              -D TDESKTOP_API_HASH=${{ secrets.API_HASH }}
+        working-directory: ./tdesktop
+
+      # Шаг 6: Подготовка файлов для упаковки в Flatpak
+      - name: Prepare files for Flatpak packaging
+        run: |
+          # Создаем корневую директорию для сборки Flatpak
+          mkdir flatpak_build_dir
+          
+          # Копируем ваш манифест в эту директорию
+          cp com.ayugram.desktop.yaml flatpak_build_dir/
+          
+          # Создаем директорию для бинарных файлов, как ожидает манифест
+          mkdir -p flatpak_build_dir/ayugram-desktop/usr/bin
+          
+          # Перемещаем скомпилированный бинарник в нужную директорию
+          mv tdesktop/out/Telegram flatpak_build_dir/ayugram-desktop/usr/bin/ayugram-desktop
+          
+          # Копируем остальные ресурсы (иконки, .desktop файлы и т.д.)
+          cp -r tdesktop/out/* flatpak_build_dir/ayugram-desktop/
+          
+          # Создаем директорию для библиотек
+          mkdir flatpak_build_dir/bundled-libs
+
+      # Шаг 7: Сборка Flatpak-бандла
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak_build_dir/com.ayugram.desktop.yaml
+          bundle: ayugram.flatpak
+          repo-path: repo
+          cache: true
+          cache-key: flatpak-cache-${{ github.sha }}
+
+      # Шаг 8: Загрузка артефакта
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayugram-flatpak-bundle
+          path: ayugram.flatpak
