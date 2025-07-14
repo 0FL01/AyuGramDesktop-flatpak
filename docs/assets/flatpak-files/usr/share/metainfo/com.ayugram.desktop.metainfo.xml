@@ -1,0 +1,80 @@
+<?xml version='1.0' encoding='utf-8'?>
+<component type="desktop">
+    <id>com.ayugram.desktop</id>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>GPL-3.0</project_license>
+    <name>AyuGram Desktop</name>
+    <summary>Desktop version of AyuGram - ToS breaking Telegram client</summary>
+    <description>
+        <p>Telegram Desktop with Ghost Mode, Anti-Recall and cool design.</p>
+    </description>
+    <categories>
+        <category>Network</category>
+        <category>InstantMessaging</category>
+    </categories>
+    <update_contact>helpdesk_at_radolyn.com</update_contact>
+    <developer_name>Radolyn Labs</developer_name>
+    <url type="homepage">https://ayugram.one/</url>
+    <url type="bugtracker">https://t.me/ayugramchat/1262</url>
+    <url type="translate">https://crowdin.com/project/ayugram</url>
+    <url type="contribute">https://github.com/AyuGram/AyuGramDesktop/blob/dev/.github/CONTRIBUTING.md</url>
+    <screenshots>
+      <screenshot type="default">
+        <image>https://raw.githubusercontent.com/telegramdesktop/tdesktop/dev/docs/assets/preview.png</image>
+      </screenshot>
+    </screenshots>
+    <keywords>
+        <keyword>tg</keyword>
+        <keyword>telegram</keyword>
+        <keyword>tdesktop</keyword>
+        <keyword>messaging</keyword>
+        <keyword>messenger</keyword>
+        <keyword>chat</keyword>
+        <keyword>sms</keyword>
+        <keyword>im</keyword>
+        <keyword>ayugram</keyword>
+    </keywords>
+    <requires>
+        <display_length compare="ge">medium</display_length>
+        <internet>always</internet>
+    </requires>
+    <supports>
+        <control>pointing</control>
+        <control>keyboard</control>
+        <control>touch</control>
+    </supports>
+    <content_rating type="oars-1.1">
+        <content_attribute id="violence-cartoon">none</content_attribute>
+        <content_attribute id="violence-fantasy">none</content_attribute>
+        <content_attribute id="violence-realistic">none</content_attribute>
+        <content_attribute id="violence-bloodshed">none</content_attribute>
+        <content_attribute id="violence-sexual">none</content_attribute>
+        <content_attribute id="violence-desecration">none</content_attribute>
+        <content_attribute id="violence-slavery">none</content_attribute>
+        <content_attribute id="violence-worship">none</content_attribute>
+        <content_attribute id="drugs-alcohol">none</content_attribute>
+        <content_attribute id="drugs-narcotics">none</content_attribute>
+        <content_attribute id="drugs-tobacco">none</content_attribute>
+        <content_attribute id="sex-nudity">none</content_attribute>
+        <content_attribute id="sex-themes">none</content_attribute>
+        <content_attribute id="sex-homosexuality">none</content_attribute>
+        <content_attribute id="sex-prostitution">none</content_attribute>
+        <content_attribute id="sex-adultery">none</content_attribute>
+        <content_attribute id="sex-appearance">none</content_attribute>
+        <content_attribute id="language-profanity">none</content_attribute>
+        <content_attribute id="language-humor">none</content_attribute>
+        <content_attribute id="language-discrimination">none</content_attribute>
+        <content_attribute id="social-chat">intense</content_attribute>
+        <content_attribute id="social-info">none</content_attribute>
+        <content_attribute id="social-audio">intense</content_attribute>
+        <content_attribute id="social-location">none</content_attribute>
+        <content_attribute id="social-contacts">intense</content_attribute>
+        <content_attribute id="money-purchasing">intense</content_attribute>
+        <content_attribute id="money-gambling">none</content_attribute>
+        <content_attribute id="money-advertising">moderate</content_attribute>
+    </content_rating>
+    <launchable type="desktop-id">com.ayugram.desktop.desktop</launchable>
+    <provides>
+        <binary>ayugram-desktop</binary>
+    </provides>
+<releases><release version="5.16.3" date="2025-07-14"><description><ul><li>Fix stale birthday suggestions removing.</li><li>Fix notification click opening a new window.</li></ul></description></release><release version="5.14.2" date="2025-05-08"><description><ul><li>Buy Rare Gifts in the Marketplace.</li><li>Sell Your Gifts for Stars.</li><li>Set Your Channel to Auto-Translate.</li></ul></description></release><release version="5.14.1" date="2025-05-01"><description><ul><li>Fix launching on Windows 7.</li></ul></description></release><release version="5.14" date="2025-05-01"><description><ul><li>Secure Group Calls Made Easy.</li><li>Automated Business Accounts.</li><li>New Gifts Settings.</li></ul></description></release><release version="5.13.1" date="2025-03-26"><description><ul><li>Fix crash in group/channel stories.</li></ul></description></release><release version="5.13" date="2025-03-26"><description><ul><li>Allow transferring my unique gifts from Send Gift section.</li><li>Edit type of gifts you accept in Settings &gt; Privacy and Security.</li><li>Swipe navigation using swipe gesture on touchpads / touchscreens.</li><li>Choose chat list quick action for swipe or middle click.</li></ul></description></release><release version="5.12.6~beta" date="2025-03-20"><description><ul><li>Allow customizing chats list swipe left action.</li><li>Fix custom emoji in poll results view.</li><li>Fix crash in main menu swipe closing.</li></ul></description></release><release version="5.12.5~beta" date="2025-03-14"><description><ul><li>Support swipe navigation on touchscreens.</li><li>Close main menu by swipe navigation.</li></ul></description></release><release version="5.12.4~beta" date="2025-03-12"><description><ul><li>Touchpad swipe back to go back in navigation history.</li><li>Touchpad swipe between folders if they're horizontal.</li><li>Out-of-the-box monochrome tray icon on Linux.</li><li>Icons telegram{,{,-attention,-mute}-panel} are renamed</li><li>Snap package got icon theming support,</li></ul></description></release><release version="5.12.3" date="2025-03-10"><description><ul><li>Fix a couple more crashes.</li><li>Fix gift disappearing on unpin.</li><li>Fix country emoji for Fragment numbers.</li></ul></description></release></releases></component>
