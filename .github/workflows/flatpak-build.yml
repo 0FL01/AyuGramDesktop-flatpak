@@ -32,6 +32,7 @@ jobs:
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           docker run --rm \
+            --cpus="4.0" \
             -u $(id -u) \
             -v "$PWD:/usr/src/tdesktop" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
