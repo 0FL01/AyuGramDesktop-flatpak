@@ -1,4 +1,4 @@
-name: Build AyuGram Flatpak
+name: Build AyuGram Flatpak with Git Cache
 
 on:
   workflow_dispatch:
@@ -9,11 +9,146 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout main repository
         uses: actions/checkout@v4
+
+      - name: Cache Git dependencies
+        id: cache-git-repos
+        uses: actions/cache@v4
         with:
-          submodules: 'recursive'
-          clean: true
+          path: ./git-cache
+          key: ${{ runner.os }}-git-deps-${{ hashFiles('**/dependencies.txt') }}
+
+      - name: Verify that required secrets are set
+        run: |
+            if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
+              echo "::error:: Обязательные секреты TDESKTOP_API_ID и/или TDESKTOP_API_HASH не найдены или пусты."
+              echo "::error:: Пожалуйста, проверьте их имена и наличие в Settings -> Secrets and variables -> Actions."
+              exit 1
+            else
+              echo "Секреты успешно найдены."
+            fi
+
+      - name: Create dependency list for cache key
+        if: steps.cache-git-repos.outputs.cache-hit != 'true'
+        run: |
+          # Этот файл используется только для генерации ключа кэша.
+          # Любое изменение в версиях зависимостей приведет к пересозданию кэша.
+          cat <<EOF > dependencies.txt
+          Implib.so:ecf7bb51a92a0fb16834c5b698570ab25f9f1d21
+          patches:1ffcb17817a2cab167061d530703842395291e69
+          zlib:v1.3.1
+          xz:v5.8.1
+          protobuf:v30.2
+          lcms2:lcms2.15
+          brotli:v1.1.0
+          highway:1.0.7
+          opus:v1.5.2
+          dav1d:1.5.1
+          openh264:v2.6.0
+          de265:v1.0.16
+          vpx:12f3a2ac603e8f10742105519e0cd03c3b8f71dd
+          webp:v1.5.0
+          avif:v1.3.0
+          heif:v1.19.8
+          jxl:v0.11.1
+          rnnoise:v0.2
+          xcb-proto:xcb-proto-1.16.0
+          xcb:libxcb-1.16
+          xcb-wm:xcb-util-wm-0.4.2
+          xcb-util:xcb-util-0.4.1-gitlab
+          xcb-image:xcb-util-image-0.4.1-gitlab
+          xcb-keysyms:ef5cb393d27511ba511c68a54f8ff7b9aab4a384
+          xcb-render-util:5ad9853d6ddcac394d42dd2d4e34436b5db9da39
+          xcb-cursor:4929f6051658ba5424b41703a1fb63f9db896065
+          xext:libXext-1.3.5
+          xtst:libXtst-1.2.4
+          xfixes:libXfixes-5.0.3
+          xv:libXv-1.0.12
+          xrandr:libXrandr-1.5.3
+          xrender:libXrender-0.9.11
+          xdamage:libXdamage-1.1.6
+          xcomposite:libXcomposite-0.4.6
+          wayland:1.19.0
+          nv-codec-headers:n12.1.14.0
+          ffmpeg:n6.1.1
+          pipewire:0.3.62
+          openal:1.24.3
+          openssl:openssl-3.2.1
+          xkbcommon:xkbcommon-1.6.0
+          qt:6.9.1
+          breakpad:v2024.02.16
+          webrtc:62321fd7128ab2650b459d4195781af8185e46b5
+          ada:v3.2.4
+          tde2e:51743dfd01dff6179e2d8f7095729caa4e2222e9
+          EOF
+
+      - name: Pre-clone Git dependencies
+        if: steps.cache-git-repos.outputs.cache-hit != 'true'
+        run: |
+          echo "Cache not found, cloning all dependencies..."
+          mkdir -p git-cache
+
+          # Функция для клонирования по тегу/ветке
+          clone_branch() { git clone -b "$2" --depth=1 "https://github.com/$1.git" "git-cache/$3"; }
+          
+          # Функция для клонирования по коммиту
+          clone_commit() {
+            cd git-cache
+            git init "$3" && cd "$3"
+            git remote add origin "https://github.com/$1.git"
+            git fetch --depth=1 origin "$2"
+            git reset --hard FETCH_HEAD
+            cd ../..
+          }
+
+          # Клонируем все зависимости из Dockerfile
+          clone_commit yugr/Implib.so ecf7bb51a92a0fb16834c5b698570ab25f9f1d21 Implib.so
+          clone_commit desktop-app/patches 1ffcb17817a2cab167061d530703842395291e69 patches
+          clone_branch madler/zlib v1.3.1 zlib
+          clone_branch tukaani-project/xz v5.8.1 xz
+          clone_branch protocolbuffers/protobuf v30.2 protobuf
+          clone_branch mm2/Little-CMS lcms2.15 Little-CMS
+          clone_branch google/brotli v1.1.0 brotli
+          clone_branch google/highway 1.0.7 highway
+          clone_branch xiph/opus v1.5.2 opus
+          clone_branch videolan/dav1d 1.5.1 dav1d
+          clone_branch cisco/openh264 v2.6.0 openh264
+          clone_branch strukturag/libde265 v1.0.16 libde265
+          clone_commit webmproject/libvpx 12f3a2ac603e8f10742105519e0cd03c3b8f71dd libvpx
+          clone_branch webmproject/libwebp v1.5.0 libwebp
+          clone_branch AOMediaCodec/libavif v1.3.0 libavif
+          clone_branch strukturag/libheif v1.19.8 libheif
+          clone_branch libjxl/libjxl v0.11.1 libjxl
+          clone_branch xiph/rnnoise v0.2 rnnoise
+          clone_branch gitlab-freedesktop-mirrors/xcbproto xcb-proto-1.16.0 xcbproto
+          clone_branch gitlab-freedesktop-mirrors/libxcb libxcb-1.16 libxcb
+          clone_branch gitlab-freedesktop-mirrors/libxcb-wm xcb-util-wm-0.4.2 libxcb-wm
+          clone_branch gitlab-freedesktop-mirrors/libxcb-util xcb-util-0.4.1-gitlab libxcb-util
+          clone_branch gitlab-freedesktop-mirrors/libxcb-image xcb-util-image-0.4.1-gitlab libxcb-image
+          clone_commit gitlab-freedesktop-mirrors/libxcb-keysyms ef5cb393d27511ba511c68a54f8ff7b9aab4a384 libxcb-keysyms
+          clone_commit gitlab-freedesktop-mirrors/libxcb-render-util 5ad9853d6ddcac394d42dd2d4e34436b5db9da39 libxcb-render-util
+          clone_commit gitlab-freedesktop-mirrors/libxcb-cursor 4929f6051658ba5424b41703a1fb63f9db896065 libxcb-cursor
+          clone_branch gitlab-freedesktop-mirrors/libxext libXext-1.3.5 libxext
+          clone_branch gitlab-freedesktop-mirrors/libxtst libXtst-1.2.4 libxtst
+          clone_branch gitlab-freedesktop-mirrors/libxfixes libXfixes-5.0.3 libxfixes
+          clone_branch gitlab-freedesktop-mirrors/libxv libXv-1.0.12 libxv
+          clone_branch gitlab-freedesktop-mirrors/libxrandr libXrandr-1.5.3 libxrandr
+          clone_branch gitlab-freedesktop-mirrors/libxrender libXrender-0.9.11 libxrender
+          clone_branch gitlab-freedesktop-mirrors/libxdamage libXdamage-1.1.6 libxdamage
+          clone_branch gitlab-freedesktop-mirrors/libxcomposite libXcomposite-0.4.6 libxcomposite
+          clone_branch gitlab-freedesktop-mirrors/wayland 1.19.0 wayland
+          clone_branch FFmpeg/nv-codec-headers n12.1.14.0 nv-codec-headers
+          clone_branch FFmpeg/FFmpeg n6.1.1 FFmpeg
+          clone_branch PipeWire/pipewire 0.3.62 pipewire
+          clone_branch kcat/openal-soft 1.24.3 openal-soft
+          clone_branch openssl/openssl openssl-3.2.1 openssl
+          clone_branch xkbcommon/libxkbcommon xkbcommon-1.6.0 libxkbcommon
+          clone_branch qt/qt5 v6.9.1 qt5
+          clone_branch chromium/breakpad v2024.02.16 breakpad
+          clone_commit desktop-app/tg_owt 62321fd7128ab2650b459d4195781af8185e46b5 tg_owt
+          clone_branch ada-url/ada v3.2.4 ada
+          clone_commit tdlib/td 51743dfd01dff6179e2d8f7095729caa4e2222e9 tde2e
 
       - name: Install dependencies and Flatpak SDK
         run: |
@@ -30,12 +165,59 @@ jobs:
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
-          MAKEFLAGS: "-j3"
         run: |
+          # Собираем Docker-образ, монтируя все зависимости из кэша
+          # Это предотвращает git clone внутри контейнера
           docker run --rm \
             --cpus="3" \
             -u $(id -u) \
             -v "$PWD:/usr/src/tdesktop" \
+            -v "$PWD/git-cache/Implib.so:/usr/src/Implib.so" \
+            -v "$PWD/git-cache/patches:/usr/src/patches" \
+            -v "$PWD/git-cache/zlib:/usr/src/zlib" \
+            -v "$PWD/git-cache/xz:/usr/src/xz" \
+            -v "$PWD/git-cache/protobuf:/usr/src/protobuf" \
+            -v "$PWD/git-cache/Little-CMS:/usr/src/Little-CMS" \
+            -v "$PWD/git-cache/brotli:/usr/src/brotli" \
+            -v "$PWD/git-cache/highway:/usr/src/highway" \
+            -v "$PWD/git-cache/opus:/usr/src/opus" \
+            -v "$PWD/git-cache/dav1d:/usr/src/dav1d" \
+            -v "$PWD/git-cache/openh264:/usr/src/openh264" \
+            -v "$PWD/git-cache/libde265:/usr/src/libde265" \
+            -v "$PWD/git-cache/libvpx:/usr/src/libvpx" \
+            -v "$PWD/git-cache/libwebp:/usr/src/libwebp" \
+            -v "$PWD/git-cache/libavif:/usr/src/libavif" \
+            -v "$PWD/git-cache/libheif:/usr/src/libheif" \
+            -v "$PWD/git-cache/libjxl:/usr/src/libjxl" \
+            -v "$PWD/git-cache/rnnoise:/usr/src/rnnoise" \
+            -v "$PWD/git-cache/xcbproto:/usr/src/xcbproto" \
+            -v "$PWD/git-cache/libxcb:/usr/src/libxcb" \
+            -v "$PWD/git-cache/libxcb-wm:/usr/src/libxcb-wm" \
+            -v "$PWD/git-cache/libxcb-util:/usr/src/libxcb-util" \
+            -v "$PWD/git-cache/libxcb-image:/usr/src/libxcb-image" \
+            -v "$PWD/git-cache/libxcb-keysyms:/usr/src/libxcb-keysyms" \
+            -v "$PWD/git-cache/libxcb-render-util:/usr/src/libxcb-render-util" \
+            -v "$PWD/git-cache/libxcb-cursor:/usr/src/libxcb-cursor" \
+            -v "$PWD/git-cache/libxext:/usr/src/libxext" \
+            -v "$PWD/git-cache/libxtst:/usr/src/libxtst" \
+            -v "$PWD/git-cache/libxfixes:/usr/src/libxfixes" \
+            -v "$PWD/git-cache/libxv:/usr/src/libxv" \
+            -v "$PWD/git-cache/libxrandr:/usr/src/libxrandr" \
+            -v "$PWD/git-cache/libxrender:/usr/src/libxrender" \
+            -v "$PWD/git-cache/libxdamage:/usr/src/libxdamage" \
+            -v "$PWD/git-cache/libxcomposite:/usr/src/libxcomposite" \
+            -v "$PWD/git-cache/wayland:/usr/src/wayland" \
+            -v "$PWD/git-cache/nv-codec-headers:/usr/src/nv-codec-headers" \
+            -v "$PWD/git-cache/FFmpeg:/usr/src/FFmpeg" \
+            -v "$PWD/git-cache/pipewire:/usr/src/pipewire" \
+            -v "$PWD/git-cache/openal-soft:/usr/src/openal-soft" \
+            -v "$PWD/git-cache/openssl:/usr/src/openssl" \
+            -v "$PWD/git-cache/libxkbcommon:/usr/src/libxkbcommon" \
+            -v "$PWD/git-cache/qt5:/usr/src/qt5" \
+            -v "$PWD/git-cache/breakpad:/usr/src/breakpad" \
+            -v "$PWD/git-cache/tg_owt:/usr/src/tg_owt" \
+            -v "$PWD/git-cache/ada:/usr/src/ada" \
+            -v "$PWD/git-cache/tde2e:/usr/src/tde2e" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
