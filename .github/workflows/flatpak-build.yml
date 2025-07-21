@@ -30,6 +30,7 @@ jobs:
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+          MAKEFLAGS: "-j3"
         run: |
           docker run --rm \
             --cpus="3" \
