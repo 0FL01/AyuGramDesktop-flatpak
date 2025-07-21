@@ -390,6 +390,7 @@ ReplyFields ReplyFieldsFromMTP(
 				= data.vreply_to_top_id().value_or(result.messageId.bare);
 			result.topicPost = data.is_forum_topic() ? 1 : 0;
 		}
+		result.todoItemId = data.vtodo_item_id().value_or_empty();
 		if (const auto header = data.vreply_from()) {
 			const auto &data = header->data();
 			result.externalPostAuthor
@@ -704,7 +705,8 @@ auto ReplyMarkupClickHandler::getUrlButton() const
 -> const HistoryMessageMarkupButton* {
 	if (const auto button = getButton()) {
 		using Type = HistoryMessageMarkupButton::Type;
-		if (button->type == Type::Url || button->type == Type::Auth || button->type == Type::Callback) {
+		if (button->type == Type::Url || button->type == Type::Auth || button->type == Type::Callback ||
+			button->type == Type::WebView || button->type == Type::SimpleWebView) {
 			return button;
 		}
 	}

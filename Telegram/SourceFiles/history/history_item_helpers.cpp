@@ -722,22 +722,19 @@ bool IsItemScheduledUntilOnline(not_null<const HistoryItem*> item) {
 ClickHandlerPtr JumpToMessageClickHandler(
 		not_null<HistoryItem*> item,
 		FullMsgId returnToId,
-		TextWithEntities highlightPart,
-		int highlightPartOffsetHint) {
+		MessageHighlightId highlight) {
 	return JumpToMessageClickHandler(
 		item->history()->peer,
 		item->id,
 		returnToId,
-		std::move(highlightPart),
-		highlightPartOffsetHint);
+		std::move(highlight));
 }
 
 ClickHandlerPtr JumpToMessageClickHandler(
 		not_null<PeerData*> peer,
 		MsgId msgId,
 		FullMsgId returnToId,
-		TextWithEntities highlightPart,
-		int highlightPartOffsetHint) {
+		MessageHighlightId highlight) {
 	return std::make_shared<LambdaClickHandler>([=] {
 		const auto separate = Core::App().separateWindowFor(peer);
 		const auto controller = separate
@@ -747,8 +744,7 @@ ClickHandlerPtr JumpToMessageClickHandler(
 			auto params = Window::SectionShow{
 				Window::SectionShow::Way::Forward
 			};
-			params.highlightPart = highlightPart;
-			params.highlightPartOffsetHint = highlightPartOffsetHint;
+			params.highlight = highlight;
 			params.origin = Window::SectionShow::OriginMessage{
 				returnToId
 			};
@@ -910,7 +906,8 @@ MTPMessageReplyHeader NewMessageReplyHeader(const Api::SendAction &action) {
 						| Flag::f_quote_offset))
 				| (quoteEntities.v.empty()
 					? Flag()
-					: Flag::f_quote_entities)),
+					: Flag::f_quote_entities)
+				| (replyTo.todoItemId ? Flag::f_todo_item_id : Flag())),
 			MTP_int(replyTo.messageId.msg),
 			peerToMTP(externalPeerId),
 			MTPMessageFwdHeader(), // reply_from
@@ -918,7 +915,8 @@ MTPMessageReplyHeader NewMessageReplyHeader(const Api::SendAction &action) {
 			MTP_int(replyToTop),
 			MTP_string(replyTo.quote.text),
 			quoteEntities,
-			MTP_int(replyTo.quoteOffset));
+			MTP_int(replyTo.quoteOffset),
+			MTP_int(replyTo.todoItemId));
 	}
 	return MTPMessageReplyHeader();
 }
@@ -1173,8 +1171,8 @@ void CheckReactionNotificationSchedule(
 	}
 	const auto peer = item->history()->peer;
 	const auto &settings = AyuSettings::getInstance();
-	if ((peer->isChannel() && !peer->isMegagroup() && !settings.hideChannelReactions)
-		|| (peer->isMegagroup() && !settings.hideGroupReactions)) {
+	if ((peer->isChannel() && !peer->isMegagroup() && !settings.showChannelReactions)
+		|| (peer->isMegagroup() && !settings.showGroupReactions)) {
 		item->markEffectWatched();
 		return;
 	}
