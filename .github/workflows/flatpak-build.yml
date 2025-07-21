@@ -1,35 +1,30 @@
-name: Сборка Flatpak для AyuGram
+name: Build AyuGram Flatpak
 
 on:
   workflow_dispatch:
 
 jobs:
   build-flatpak:
-    name: Сборка и упаковка Flatpak
+    name: Build and package Flatpak
     runs-on: self-hosted
 
     steps:
-      - name: Клонирование репозитория
+      - name: Checkout repository and submodules
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          submodules: 'recursive'
           clean: true
 
-      - name: Инициализация подмодулей
-        run: |
-          git submodule update --init --recursive --force
-          git submodule foreach --recursive 'git checkout HEAD || git checkout master || git checkout main || true'
-
-      - name: Установка зависимостей и Flatpak SDK
+      - name: Install dependencies and Flatpak SDK
         run: |
           sudo dnf install -y flatpak flatpak-builder python3-pip
           pip3 install poetry
           flatpak install -y --noninteractive org.gnome.Sdk//48
 
-      - name: Подготовка библиотек
+      - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
 
-      - name: Сборка бинарного файла AyuGram
+      - name: Build AyuGram binary
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
@@ -42,27 +37,27 @@ jobs:
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
 
-      - name: Подготовка директории для сборки Flatpak
+      - name: Prepare Flatpak build directory
         run: |
           mkdir ayugram-flatpak-build
           cp out/Release/AyuGram ayugram-flatpak-build/
           cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
 
-      - name: Определение версии приложения
+      - name: Get application version
         id: get_version
         run: |
           APP_VERSION=$(grep '<release version=' docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml | sed -n 's/.*version="\([^"]*\)".*/\1/p')
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
-          echo "Найдена версия: ${APP_VERSION}"
+          echo "Found version: ${APP_VERSION}"
 
-      - name: Сборка Flatpak пакета
+      - name: Build Flatpak package
+        working-directory: ./ayugram-flatpak-build
         run: |
           rm -rf repo build-dir
           flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
           flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
-        working-directory: ./ayugram-flatpak-build
 
-      - name: Загрузка артефакта
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ayugram-flatpak-package
