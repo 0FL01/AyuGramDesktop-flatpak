@@ -1,0 +1,115 @@
+# Имя пайплайна, которое будет отображаться в интерфейсе GitHub Actions
+name: Сборка Flatpak для AyuGram
+
+# Условия запуска пайплайна
+on:
+  # Позволяет запускать этот воркфлоу вручную со страницы Actions
+  workflow_dispatch:
+
+jobs:
+  build-flatpak:
+    # Название задачи, которое будет отображаться в интерфейсе
+    name: Сборка и упаковка Flatpak
+    
+    # Указываем, что задача должна выполняться на вашем self-hosted раннере
+    runs-on: self-hosted
+
+    steps:
+      # Шаг 1: Клонирование репозитория
+      # Скачиваем исходный код текущей ветки (dev) вместе со всеми подмодулями (--recursive)
+      - name: Клонирование репозитория
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      # Шаг 2: Установка системных зависимостей и Flatpak SDK
+      # На вашем Fedora-раннере будут установлены все необходимые утилиты для сборки
+      - name: Установка зависимостей и Flatpak SDK
+        run: |
+          # Устанавливаем flatpak, flatpak-builder и pip с помощью системного менеджера пакетов dnf
+          # Флаг -y необходим для автоматического подтверждения установки
+          sudo dnf install -y flatpak flatpak-builder python3-pip
+          
+          # Устанавливаем poetry, который требуется для скрипта подготовки
+          pip3 install poetry
+          
+          # Устанавливаем GNOME SDK версии 46, который указан как зависимость в вашем манифесте
+          # Флаг --noninteractive важен для автоматизации, чтобы не запрашивать подтверждение
+          flatpak install -y --noninteractive org.gnome.Sdk//46
+
+      # Шаг 3: Подготовка библиотек Telegram Desktop
+      # Запускаем скрипт подготовки, как указано в ручной инструкции
+      - name: Подготовка библиотек
+        run: ./Telegram/build/prepare/linux.sh
+
+      # Шаг 4: Сборка бинарного файла AyuGram с помощью Docker
+      # Этот шаг в точности повторяет команду из документации, но с улучшениями для CI/CD
+      - name: Сборка бинарного файла AyuGram
+        env:
+          # Настоятельно рекомендуется хранить API ключи в секретах репозитория
+          # GitHub -> Settings -> Secrets and variables -> Actions -> New repository secret
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          # Запускаем сборку внутри Docker-контейнера centos_env
+          # Флаг -it убран, так как он для интерактивных сессий и не нужен в CI
+          docker run --rm \
+            -u $(id -u) \
+            -v "$PWD:/usr/src/tdesktop" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+
+      # Шаг 5: Подготовка директории для сборки Flatpak
+      # Создаем временную директорию и копируем в нее все необходимые артефакты
+      - name: Подготовка директории для сборки Flatpak
+        run: |
+          # Создаем директорию для сборки
+          mkdir ayugram-flatpak-build
+          
+          # Копируем скомпилированный бинарный файл
+          cp out/Release/AyuGram ayugram-flatpak-build/
+          
+          # Копируем все файлы для Flatpak (манифест, иконки, desktop-файл и т.д.)
+          cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
+
+      # Шаг 6: Динамическое определение версии приложения
+      # Извлекаем версию из metainfo.xml, чтобы имя файла было всегда актуальным
+      - name: Определение версии приложения
+        id: get_version
+        run: |
+          # Ищем строку с версией в XML-файле, извлекаем ее с помощью sed и записываем в переменную окружения GITHUB_ENV
+          APP_VERSION=$(grep '<release version=' docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml | sed -n 's/.*version="\([^"]*\)".*/\1/p')
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
+          echo "Найдена версия: ${APP_VERSION}"
+
+      # Шаг 7: Сборка Flatpak пакета
+      # Основной шаг, где происходит магия flatpak-builder
+      - name: Сборка Flatpak пакета
+        run: |
+          # Очищаем предыдущие артефакты сборки на всякий случай
+          rm -rf repo build-dir
+          
+          # Запускаем сборку. --disable-rofiles-fuse добавлен превентивно для избежания проблем с правами
+          # --force-clean гарантирует чистую сборку
+          flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
+          
+          # Создаем единый .flatpak файл для распространения
+          # Используем переменную с версией, полученную на предыдущем шаге
+          flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
+
+        # Указываем рабочую директорию для выполнения команд этого шага
+        working-directory: ./ayugram-flatpak-build
+
+      # Шаг 8: Загрузка артефакта
+      # Сохраняем собранный .flatpak файл в артефактах сборки GitHub
+      - name: Загрузка артефакта
+        uses: actions/upload-artifact@v4
+        with:
+          # Имя артефакта в интерфейсе GitHub
+          name: ayugram-flatpak-package
+          # Путь к файлу, который нужно загрузить. Используем маску, чтобы не зависеть от точной версии
+          path: ayugram-flatpak-build/ayugram-desktop-*.flatpak
+          # Время хранения артефакта (15 дней)
+          retention-days: 15
