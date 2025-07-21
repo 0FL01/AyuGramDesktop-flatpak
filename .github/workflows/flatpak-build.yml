@@ -19,6 +19,7 @@ jobs:
         run: |
           sudo dnf install -y flatpak flatpak-builder python3-pip
           pip3 install poetry
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive org.gnome.Sdk//48
 
