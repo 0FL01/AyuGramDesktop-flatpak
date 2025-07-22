@@ -85,6 +85,36 @@ jobs:
           flatpak install --user -y --noninteractive org.gnome.Sdk//48
           flatpak install --user -y --noninteractive org.gnome.Platform//48
 
+      - name: Build static ccache if not cached
+        id: static-ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/ccache-static/ccache
+          key: ${{ runner.os }}-static-ccache-v1
+
+      - name: Build static ccache
+        if: steps.static-ccache.outputs.cache-hit != 'true'
+        run: |
+          echo "Статический ccache не найден в кэше, собираем его..."
+          sudo dnf install -y gcc-c++ cmake git zlib-devel libzstd-devel fmt-devel
+          
+          git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
+          cd ccache-source
+          
+          mkdir build && cd build
+          
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DSTATIC_LINKING=ON \
+            -DENABLE_TESTING=OFF
+            
+          cmake --build . -j$(nproc)
+          
+          mkdir -p ${{ github.workspace }}/ccache-static
+          cp ./ccache ${{ github.workspace }}/ccache-static/ccache
+          echo "Статический ccache успешно собран."
+
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
         uses: actions/cache@v4
