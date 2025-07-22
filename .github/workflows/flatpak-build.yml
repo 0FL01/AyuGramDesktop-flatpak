@@ -47,13 +47,14 @@ jobs:
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           # Собираем Docker-образ, используя кэш Git-зависимостей и кэш компиляции ccache
+          # Монтируем директорию кэша компиляции с хоста в контейнер
+          # Указываем ccache, где находится его директория внутри контейнера
+          # Указываем CMake использовать ccache для ускорения компиляции
           docker run --rm \
             --cpus="3" \
             -u $(id -u) \
             -v "$PWD:/usr/src/tdesktop" \
-            # Монтируем директорию кэша компиляции с хоста в контейнер
             -v ~/.ccache:/ccache \
-            # Указываем ccache, где находится его директория внутри контейнера
             -e CCACHE_DIR=/ccache \
             -v "$PWD/git-cache/Implib.so:/usr/src/Implib.so" \
             -v "$PWD/git-cache/patches:/usr/src/patches" \
@@ -105,7 +106,6 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
-            # Указываем CMake использовать ccache для ускорения компиляции
             -D CMAKE_C_COMPILER_LAUNCHER=ccache \
             -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
 
