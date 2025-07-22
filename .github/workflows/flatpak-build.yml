@@ -85,79 +85,77 @@ jobs:
           flatpak install --user -y --noninteractive org.gnome.Sdk//48
           flatpak install --user -y --noninteractive org.gnome.Platform//48
 
-      - name: Build static ccache if not cached
-        id: static-ccache
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/ccache-static/ccache
-          key: ${{ runner.os }}-static-ccache-v1
-
+          - name: Build static ccache if not cached
+          id: static-ccache
+          uses: actions/cache@v4
+          with:
+            path: ${{ github.workspace }}/ccache-static/ccache
+            key: ${{ runner.os }}-static-ccache-v2
+  
       - name: Build static ccache
         if: steps.static-ccache.outputs.cache-hit != 'true'
         run: |
-          echo "Статический ccache не найден в кэше, собираем его..."
-          sudo dnf install -y gcc-c++ cmake git zlib-devel libzstd-devel fmt-devel
-          
-          git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
-          cd ccache-source
-          
-          mkdir build && cd build
-          
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DSTATIC_LINKING=ON \
-            -DENABLE_TESTING=OFF
-            
-          cmake --build . -j$(nproc)
-          
-          mkdir -p ${{ github.workspace }}/ccache-static
-          cp ./ccache ${{ github.workspace }}/ccache-static/ccache
-          echo "Статический ccache успешно собран."
-
+            sudo dnf install -y gcc-c++ cmake git zlib-devel libzstd-devel fmt-devel
+            git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
+            cd ccache-source
+            mkdir build && cd build
+            cmake .. \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DENABLE_TESTING=OFF \
+              -DHIREDIS_FROM_INTERNET=ON \
+              -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++" \
+              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
+            cmake --build . -j$(nproc)
+            mkdir -p ${{ github.workspace }}/ccache-static
+            cp ./ccache ${{ github.workspace }}/ccache-static/ccache
+  
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
         uses: actions/cache@v4
         with:
-          path: Telegram/ThirdParty
-          key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
-
-      - name: Install ccache on runner
-        run: |
-            sudo dnf install -y ccache
-
+            path: Telegram/ThirdParty
+            key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
+  
       - name: Cache ccache directory
         uses: actions/cache@v4
         with:
-              path: ${{ github.workspace }}/.ccache
-              key: ${{ runner.os }}-ccache-${{ github.sha }}
-              restore-keys: |
-                ${{ runner.os }}-ccache-
-
+            path: ${{ github.workspace }}/.ccache
+            key: ${{ runner.os }}-ccache-${{ github.sha }}
+            restore-keys: |
+              ${{ runner.os }}-ccache-
+  
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
-
+  
+      - name: Zero ccache statistics before build
+        run: |
+            ${{ github.workspace }}/ccache-static/ccache -z --config-path=${{ github.workspace }}/.ccache/ccache.conf
+  
       - name: Build AyuGram binary
         env:
-          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+            TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+            TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
-
-          mkdir -p ${{ github.workspace }}/.ccache
-
-          docker run --rm \
-            --cpus="3" \
-            -u $(id -u):$(id -g) \
-            -v "$PWD:/usr/src/tdesktop" \
-            -v "/usr/bin/ccache:/usr/local/bin/ccache:ro" \
-            -v "${{ github.workspace }}/.ccache:/home/user/.ccache" \
-            -e "CCACHE_DIR=/home/user/.ccache" \
-            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-            -D CMAKE_C_COMPILER_LAUNCHER=/usr/local/bin/ccache \
-            -D CMAKE_CXX_COMPILER_LAUNCHER=/usr/local/bin/ccache \
-            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
-            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+            mkdir -p ${{ github.workspace }}/.ccache
+            docker run --rm \
+              --cpus="3" \
+              -u $(id -u):$(id -g) \
+              -v "$PWD:/usr/src/tdesktop" \
+              -v "${{ github.workspace }}/ccache-static/ccache:/usr/local/bin/ccache:ro" \
+              -v "${{ github.workspace }}/.ccache:/home/user/.ccache" \
+              -e "CCACHE_DIR=/home/user/.ccache" \
+              ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+              -D CMAKE_C_COMPILER_LAUNCHER=/usr/local/bin/ccache \
+              -D CMAKE_CXX_COMPILER_LAUNCHER=/usr/local/bin/ccache \
+              -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+              -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+  
+      - name: Show ccache statistics and cache size
+        run: |
+            ${{ github.workspace }}/ccache-static/ccache -s --config-path=${{ github.workspace }}/.ccache/ccache.conf
+            du -sh ${{ github.workspace }}/.ccache
 
       - name: Prepare Flatpak build directory
         run: |
