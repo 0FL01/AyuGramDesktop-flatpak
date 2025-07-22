@@ -99,8 +99,10 @@ jobs:
           sudo dnf install -y --skip-unavailable \
             gcc-c++ cmake git make pkgconf-pkg-config \
             glibc-static libstdc++-static zlib-ng-compat-devel
+          
           echo "Установленные базовые пакеты для сборки:"
-          dnf list installed | grep -E "(gcc|cmake|git|make|glibc|zlib)"
+          dnf list --installed | grep -E "(gcc|cmake|git|make|glibc|zlib)" || true
+
           rm -rf ccache-source ccache-build
           git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
           if [ $? -ne 0 ]; then
@@ -110,6 +112,7 @@ jobs:
           cd ccache-source
           mkdir build && cd build
           echo "Запуск конфигурации CMake с принудительным использованием встроенных зависимостей..."
+          
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DSTATIC_LINKING=ON \
@@ -119,27 +122,32 @@ jobs:
             -DENABLE_OPENSSL=BUNDLED \
             -DENABLE_ARCHIVE=BUNDLED \
             -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
+
           if [ $? -ne 0 ]; then
             echo "::error::Ошибка конфигурации CMake. Детали:"
             cat CMakeFiles/CMakeError.log || echo "CMakeError.log не найден"
             cat CMakeFiles/CMakeOutput.log || echo "CMakeOutput.log не найден"
             exit 1
           fi
+
           echo "Начинаем компиляцию ccache..."
           cmake --build . -j$(nproc) --verbose
           if [ $? -ne 0 ]; then
             echo "::error::Ошибка компиляции ccache"
             exit 1
           fi
+
           echo "Проверка зависимостей собранного ccache:"
           ldd ./ccache || echo "ccache собран статически"
           file ./ccache
+          
           echo "Тестирование ccache..."
           ./ccache --version
           if [ $? -ne 0 ]; then
             echo "::error::Собранный ccache не работает"
             exit 1
           fi
+
           mkdir -p ${{ github.workspace }}/ccache-static
           cp ./ccache ${{ github.workspace }}/ccache-static/ccache
           chmod +x ${{ github.workspace }}/ccache-static/ccache
