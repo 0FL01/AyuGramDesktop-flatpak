@@ -96,9 +96,9 @@ jobs:
         run: |
             sudo dnf install -y ccache
 
-            - name: Cache ccache directory
-            uses: actions/cache@v4
-            with:
+      - name: Cache ccache directory
+        uses: actions/cache@v4
+        with:
               path: ${{ github.workspace }}/.ccache
               key: ${{ runner.os }}-ccache-${{ github.sha }}
               restore-keys: |
