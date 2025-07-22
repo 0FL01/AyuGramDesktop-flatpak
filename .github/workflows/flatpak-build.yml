@@ -9,16 +9,24 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Manual cleanup with sudo
+        run: |
+          cd /home/runner/actions-runner/_work/AyuGramDesktop-flatpak/AyuGramDesktop-flatpak || true
+          if [ -d "git-cache" ]; then
+            echo "Fixing permissions for git-cache..."
+            sudo find git-cache -type d -exec chmod 755 {} \; || true
+            sudo find git-cache -type f -exec chmod 644 {} \; || true
+            sudo chown -R $(id -u):$(id -g) git-cache || true
+            echo "Removing git-cache..."
+            rm -rf git-cache || sudo rm -rf git-cache || true
+          fi
+          # Clean everything else
+          sudo find . -mindepth 1 -maxdepth 1 ! -name 'git-cache' -exec rm -rf {} \; || true
+
       - name: Checkout main repository
         uses: actions/checkout@v4
-
-      - name: Force clean git cache permissions
-        run: |
-          if [ -d "./git-cache" ]; then
-            sudo find ./git-cache -type d -exec chmod 755 {} \;
-            sudo find ./git-cache -type f -exec chmod 644 {} \;
-            sudo chown -R $(id -u):$(id -g) ./git-cache || true
-          fi
+        with:
+          clean: false
 
       - name: Cache Git dependencies
         id: cache-git-repos
@@ -56,7 +64,7 @@ jobs:
         run: |
           docker run --rm \
             --cpus="3" \
-            -u $(id -u) \
+            -u $(id -u):$(id -g) \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$PWD/git-cache/Implib.so:/usr/src/Implib.so" \
             -v "$PWD/git-cache/patches:/usr/src/patches" \
@@ -108,6 +116,14 @@ jobs:
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+
+      - name: Fix git-cache permissions after Docker
+        run: |
+          if [ -d "./git-cache" ]; then
+            sudo find ./git-cache -type d -exec chmod 755 {} \;
+            sudo find ./git-cache -type f -exec chmod 644 {} \;
+            sudo chown -R $(id -u):$(id -g) ./git-cache
+          fi
 
       - name: Prepare Flatpak build directory
         run: |
