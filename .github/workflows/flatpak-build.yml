@@ -9,11 +9,16 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Force clean workspace
+        run: |
+          echo "Принудительная очистка рабочей директории..."
+          sudo rm -rf ./* || true
+          sudo rm -rf ./.git* || true
+
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          clean: true 
 
       - name: Verify that required secrets are set
         run: |
