@@ -58,8 +58,6 @@ jobs:
 
           echo "Обновление $METAINFO_FILE для версии ${{ env.APP_VERSION }} от $CURRENT_DATE"
 
-          # Создаем новый XML-блок для релиза.
-          # Мы добавляем новую запись о релизе сразу после тега <releases>, сохраняя историю.
           sed -i '/<releases>/a \
           <release version="${{ env.APP_VERSION }}" date="'"$CURRENT_DATE"'">\
             <description>\
