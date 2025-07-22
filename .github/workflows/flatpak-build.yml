@@ -12,6 +12,14 @@ jobs:
       - name: Checkout main repository
         uses: actions/checkout@v4
 
+      - name: Force clean git cache permissions
+        run: |
+          if [ -d "./git-cache" ]; then
+            sudo find ./git-cache -type d -exec chmod 755 {} \;
+            sudo find ./git-cache -type f -exec chmod 644 {} \;
+            sudo chown -R $(id -u):$(id -g) ./git-cache || true
+          fi
+
       - name: Cache Git dependencies
         id: cache-git-repos
         uses: actions/cache@v4
