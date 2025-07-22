@@ -95,60 +95,69 @@ jobs:
       - name: Build static ccache
         if: steps.static-ccache.outputs.cache-hit != 'true'
         run: |
-              echo "Статический ccache не найден в кэше, собираем его..."
-              sudo dnf install -y gcc-c++ cmake git zlib-devel zlib-static \
-                                 libzstd-devel libzstd-static fmt-devel fmt-static \
-                                 glibc-static libstdc++-static make pkgconfig \
-                                 openssl-devel openssl-static libarchive-devel \
-                                 libarchive-static
-              rm -rf ccache-source ccache-build
-              git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
-              if [ $? -ne 0 ]; then
-                echo "::error::Ошибка клонирования репозитория ccache"
-                exit 1
-              fi
-              cd ccache-source
-              mkdir build && cd build
-              echo "Запуск конфигурации CMake..."
-              cmake .. \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_VERBOSE_MAKEFILE=ON \
-                -DBUILD_SHARED_LIBS=OFF \
-                -DSTATIC_LINKING=ON \
-                -DENABLE_ZSTD=BUNDLED \
-                -DENABLE_TESTING=OFF \
-                -DCMAKE_C_FLAGS="-static" \
-                -DCMAKE_CXX_FLAGS="-static" \
-                -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++" \
-                -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
-                -DCMAKE_LINK_SEARCH_START_STATIC=ON \
-                -DCMAKE_LINK_SEARCH_END_STATIC=ON
-              if [ $? -ne 0 ]; then
-                echo "::error::Ошибка конфигурации CMake. Детали:"
-                cat CMakeFiles/CMakeError.log || echo "CMakeError.log не найден"
-                cat CMakeFiles/CMakeOutput.log || echo "CMakeOutput.log не найден"
-                exit 1
-              fi
-              echo "Начинаем компиляцию ccache..."
-              cmake --build . -j$(nproc) --verbose
-              if [ $? -ne 0 ]; then
-                echo "::error::Ошибка компиляции ccache"
-                exit 1
-              fi
-              echo "Проверка зависимостей собранного ccache:"
-              ldd ./ccache || echo "ccache собран статически (отлично!)"
-              echo "Тестирование ccache..."
-              ./ccache --version
-              if [ $? -ne 0 ]; then
-                echo "::error::Собранный ccache не работает"
-                exit 1
-              fi
-              mkdir -p ${{ github.workspace }}/ccache-static
-              cp ./ccache ${{ github.workspace }}/ccache-static/ccache
-              chmod +x ${{ github.workspace }}/ccache-static/ccache
-              echo "Полностью статический ccache успешно собран и протестирован."
-              cd ${{ github.workspace }}
-              rm -rf ccache-source
+          echo "Статический ccache не найден в кэше, собираем его..."
+          sudo dnf install -y --skip-unavailable \
+            gcc-c++ cmake git make pkgconf-pkg-config \
+            zlib-ng-compat-devel zlib-ng-compat-static \
+            libzstd-devel libzstd-static \
+            fmt-devel fmt-static \
+            glibc-static libstdc++-static \
+            openssl-devel openssl-static \
+            libarchive-devel libarchive-static
+          echo "Установленные статические библиотеки:"
+          dnf list installed | grep -E "(static|devel)" | head -10
+          rm -rf ccache-source ccache-build
+          git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
+          if [ $? -ne 0 ]; then
+            echo "::error::Ошибка клонирования репозитория ccache"
+            exit 1
+          fi
+          cd ccache-source
+          mkdir build && cd build
+          echo "Запуск конфигурации CMake..."
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_VERBOSE_MAKEFILE=ON \
+            -DENABLE_ZSTD=BUNDLED \
+            -DENABLE_TESTING=OFF \
+            -DSTATIC_LINKING=ON \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
+          if [ $? -ne 0 ]; then
+            echo "Простая конфигурация не сработала, пробуем fallback..."
+            rm -rf CMakeCache.txt CMakeFiles/
+            cmake .. \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DENABLE_ZSTD=BUNDLED \
+              -DENABLE_TESTING=OFF
+          fi
+          if [ $? -ne 0 ]; then
+            echo "::error::Ошибка конфигурации CMake. Детали:"
+            cat CMakeFiles/CMakeError.log || echo "CMakeError.log не найден"
+            cat CMakeFiles/CMakeOutput.log || echo "CMakeOutput.log не найден"
+            exit 1
+          fi
+          echo "Начинаем компиляцию ccache..."
+          cmake --build . -j$(nproc) --verbose
+          if [ $? -ne 0 ]; then
+            echo "::error::Ошибка компиляции ccache"
+            exit 1
+          fi
+          echo "Проверка зависимостей собранного ccache:"
+          ldd ./ccache || echo "ccache собран статически"
+          file ./ccache
+          echo "Тестирование ccache..."
+          ./ccache --version
+          if [ $? -ne 0 ]; then
+            echo "::error::Собранный ccache не работает"
+            exit 1
+          fi
+          mkdir -p ${{ github.workspace }}/ccache-static
+          cp ./ccache ${{ github.workspace }}/ccache-static/ccache
+          chmod +x ${{ github.workspace }}/ccache-static/ccache
+          echo "Полностью статический ccache успешно собран и протестирован."
+          cd ${{ github.workspace }}
+          rm -rf ccache-source
   
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
