@@ -107,8 +107,6 @@ jobs:
               -v "$PWD:/usr/src/tdesktop" \
               ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
               /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-              -D CMAKE_C_COMPILER_LAUNCHER=/usr/local/bin/ccache \
-              -D CMAKE_CXX_COMPILER_LAUNCHER=/usr/local/bin/ccache \
               -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
               -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
 
