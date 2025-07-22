@@ -150,13 +150,14 @@ jobs:
           clone_branch ada-url/ada v3.2.4 ada
           clone_commit tdlib/td 51743dfd01dff6179e2d8f7095729caa4e2222e9 tde2e
 
-      - name: Install dependencies and Flatpak SDK
-        run: |
-          sudo dnf install -y flatpak flatpak-builder python3-pip
-          pip3 install poetry
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive org.gnome.Sdk//48
+          - name: Install dependencies and Flatpak SDK
+          run: |
+            sudo dnf install -y flatpak flatpak-builder python3-pip
+            pip3 install poetry
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+            flatpak install --user -y --noninteractive org.gnome.Sdk//48
+            flatpak install --user -y --noninteractive org.gnome.Platform//48
 
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
