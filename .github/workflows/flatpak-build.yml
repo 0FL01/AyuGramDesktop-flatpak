@@ -95,20 +95,26 @@ jobs:
       - name: Build static ccache
         if: steps.static-ccache.outputs.cache-hit != 'true'
         run: |
-            sudo dnf install -y gcc-c++ cmake git zlib-devel libzstd-devel fmt-devel
-            git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
-            cd ccache-source
-            mkdir build && cd build
-            cmake .. \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DENABLE_TESTING=OFF \
-              -DHIREDIS_FROM_INTERNET=ON \
-              -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++" \
-              -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY
-            cmake --build . -j$(nproc)
-            mkdir -p ${{ github.workspace }}/ccache-static
-            cp ./ccache ${{ github.workspace }}/ccache-static/ccache
+              echo "Статический ccache не найден в кэше, собираем его..."
+              sudo dnf install -y gcc-c++ cmake git zlib-devel libzstd-devel fmt-devel glibc-static libstdc++-static
+              
+              git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
+              cd ccache-source
+              
+              mkdir build && cd build
+              
+              cmake .. \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DSTATIC_LINKING=ON \
+                -DENABLE_ZSTD=BUNDLED \
+                -DENABLE_TESTING=OFF
+                
+              cmake --build . -j$(nproc)
+              
+              mkdir -p ${{ github.workspace }}/ccache-static
+              cp ./ccache ${{ github.workspace }}/ccache-static/ccache
+              echo "Полностью статический ccache успешно собран."
   
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
