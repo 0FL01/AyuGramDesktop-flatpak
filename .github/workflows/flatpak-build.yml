@@ -95,24 +95,24 @@ jobs:
       - name: Build static ccache
         if: steps.static-ccache.outputs.cache-hit != 'true'
         run: |
-          echo "Статический ccache не найден в кэше, собираем его..."
+          echo "Статический ccache не найден в кэше. Собираем последнюю стабильную версию..."
           sudo dnf install -y --skip-unavailable \
             gcc-c++ cmake git make pkgconf-pkg-config \
             glibc-static libstdc++-static zlib-ng-compat-devel
-          
           echo "Установленные базовые пакеты для сборки:"
           dnf list --installed | grep -E "(gcc|cmake|git|make|glibc|zlib)" || true
-
           rm -rf ccache-source ccache-build
-          git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
+          git clone https://github.com/ccache/ccache.git ccache-source
           if [ $? -ne 0 ]; then
             echo "::error::Ошибка клонирования репозитория ccache"
             exit 1
           fi
           cd ccache-source
+          LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "Переключение на последнюю стабильную версию ccache: $LATEST_TAG"
+          git checkout $LATEST_TAG
           mkdir build && cd build
-          echo "Запуск конфигурации CMake с принудительным использованием встроенных зависимостей..."
-          
+          echo "Запуск конфигурации CMake для последней версии ccache..."
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DSTATIC_LINKING=ON \
