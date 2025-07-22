@@ -117,10 +117,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DSTATIC_LINKING=ON \
             -DENABLE_TESTING=OFF \
-            -DENABLE_FMT=BUNDLED \
-            -DENABLE_ZSTD=BUNDLED \
-            -DENABLE_OPENSSL=BUNDLED \
-            -DENABLE_ARCHIVE=BUNDLED \
+            -DDEPS=BUNDLED \
             -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
 
           if [ $? -ne 0 ]; then
