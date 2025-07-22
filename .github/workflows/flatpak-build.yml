@@ -92,6 +92,18 @@ jobs:
           path: Telegram/ThirdParty
           key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
 
+      - name: Install ccache on runner
+        run: |
+            sudo dnf install -y ccache
+
+            - name: Cache ccache directory
+            uses: actions/cache@v4
+            with:
+              path: ${{ github.workspace }}/.ccache
+              key: ${{ runner.os }}-ccache-${{ github.sha }}
+              restore-keys: |
+                ${{ runner.os }}-ccache-
+
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
 
@@ -100,12 +112,20 @@ jobs:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
+
+          mkdir -p ${{ github.workspace }}/.ccache
+
           docker run --rm \
             --cpus="3" \
             -u $(id -u):$(id -g) \
             -v "$PWD:/usr/src/tdesktop" \
+            -v "/usr/bin/ccache:/usr/local/bin/ccache:ro" \
+            -v "${{ github.workspace }}/.ccache:/home/user/.ccache" \
+            -e "CCACHE_DIR=/home/user/.ccache" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_C_COMPILER_LAUNCHER=/usr/local/bin/ccache \
+            -D CMAKE_CXX_COMPILER_LAUNCHER=/usr/local/bin/ccache \
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
 
