@@ -85,10 +85,10 @@ jobs:
           flatpak install --user -y --noninteractive org.gnome.Sdk//48
           flatpak install --user -y --noninteractive org.gnome.Platform//48
 
-          - name: Build static ccache if not cached
-          id: static-ccache
-          uses: actions/cache@v4
-          with:
+      - name: Build static ccache if not cached
+        id: static-ccache
+        uses: actions/cache@v4
+        with:
             path: ${{ github.workspace }}/ccache-static/ccache
             key: ${{ runner.os }}-static-ccache-v2
   
