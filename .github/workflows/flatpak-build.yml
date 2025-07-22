@@ -98,13 +98,9 @@ jobs:
           echo "Статический ccache не найден в кэше, собираем его..."
           sudo dnf install -y --skip-unavailable \
             gcc-c++ cmake git make pkgconf-pkg-config \
-            zlib-ng-compat-devel zlib-ng-compat-static \
-            libzstd-devel libzstd-static \
-            glibc-static libstdc++-static \
-            openssl-devel openssl-static \
-            libarchive-devel libarchive-static
-          echo "Установленные статические библиотеки:"
-          dnf list installed | grep -E "(static|devel)" | head -10
+            glibc-static libstdc++-static zlib-ng-compat-devel
+          echo "Установленные базовые пакеты для сборки:"
+          dnf list installed | grep -E "(gcc|cmake|git|make|glibc|zlib)"
           rm -rf ccache-source ccache-build
           git clone --depth=1 --branch v4.10 https://github.com/ccache/ccache.git ccache-source
           if [ $? -ne 0 ]; then
@@ -113,25 +109,16 @@ jobs:
           fi
           cd ccache-source
           mkdir build && cd build
-          echo "Запуск конфигурации CMake..."
+          echo "Запуск конфигурации CMake с принудительным использованием встроенных зависимостей..."
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_VERBOSE_MAKEFILE=ON \
-            -DENABLE_ZSTD=BUNDLED \
-            -DENABLE_FMT=BUNDLED \
-            -DENABLE_TESTING=OFF \
             -DSTATIC_LINKING=ON \
+            -DENABLE_TESTING=OFF \
+            -DENABLE_FMT=BUNDLED \
+            -DENABLE_ZSTD=BUNDLED \
+            -DENABLE_OPENSSL=BUNDLED \
+            -DENABLE_ARCHIVE=BUNDLED \
             -DCMAKE_POSITION_INDEPENDENT_CODE=OFF
-          if [ $? -ne 0 ]; then
-            echo "Простая конфигурация не сработала, пробуем fallback..."
-            rm -rf CMakeCache.txt CMakeFiles/
-            cmake .. \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DBUILD_SHARED_LIBS=OFF \
-              -DENABLE_ZSTD=BUNDLED \
-              -DENABLE_FMT=BUNDLED \
-              -DENABLE_TESTING=OFF
-          fi
           if [ $? -ne 0 ]; then
             echo "::error::Ошибка конфигурации CMake. Детали:"
             cat CMakeFiles/CMakeError.log || echo "CMakeError.log не найден"
