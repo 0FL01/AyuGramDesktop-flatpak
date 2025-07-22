@@ -1,4 +1,4 @@
-name: Build AyuGram Flatpak with Git Cache
+name: Build AyuGram Flatpak
 
 on:
   workflow_dispatch:
@@ -9,55 +9,44 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Manual cleanup with sudo
-        run: |
-          cd /home/runner/actions-runner/_work/AyuGramDesktop-flatpak/AyuGramDesktop-flatpak || true
-          if [ -d "git-cache" ]; then
-            echo "Fixing permissions for git-cache..."
-            sudo find git-cache -type d -exec chmod 755 {} \; || true
-            sudo find git-cache -type f -exec chmod 644 {} \; || true
-            sudo chown -R $(id -u):$(id -g) git-cache || true
-            echo "Removing git-cache..."
-            rm -rf git-cache || sudo rm -rf git-cache || true
-          fi
-          # Clean everything else
-          sudo find . -mindepth 1 -maxdepth 1 ! -name 'git-cache' -exec rm -rf {} \; || true
-
-      - name: Checkout main repository
+      - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
-          clean: false
-
-      - name: Cache Git dependencies
-        id: cache-git-repos
-        uses: actions/cache@v4
-        with:
-          path: ./git-cache
-          key: ${{ runner.os }}-git-deps-${{ hashFiles('**/dependencies.txt') }}
+          submodules: 'recursive'
+          clean: true 
 
       - name: Verify that required secrets are set
         run: |
-            if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
-              echo "::error:: Обязательные секреты TDESKTOP_API_ID и/или TDESKTOP_API_HASH не найдены или пусты."
-              echo "::error:: Пожалуйста, проверьте их имена и наличие в Settings -> Secrets and variables -> Actions."
-              exit 1
-            else
-              echo "Секреты успешно найдены."
-            fi
+          if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
+            echo "::error:: Обязательные секреты TDESKTOP_API_ID и/или TDESKTOP_API_HASH не найдены или пусты."
+            echo "::error:: Пожалуйста, проверьте их имена и наличие в Settings -> Secrets and variables -> Actions."
+            exit 1
+          else
+            echo "Секреты успешно найдены."
+          fi
 
       - name: Install dependencies and Flatpak SDK
         run: |
-            sudo dnf install -y flatpak flatpak-builder python3-pip
-            pip3 install poetry
-            echo "$HOME/.local/bin" >> $GITHUB_PATH
-            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-            flatpak install --user -y --noninteractive org.gnome.Sdk//48
-            flatpak install --user -y --noninteractive org.gnome.Platform//48
+          sudo dnf install -y flatpak flatpak-builder python3-pip
+          pip3 install --user poetry
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive org.gnome.Sdk//48
+          flatpak install --user -y --noninteractive org.gnome.Platform//48
+
+
+      - name: Cache TDesktop Dependencies
+        id: cache-tdesktop-deps
+        uses: actions/cache@v4
+        with:
+          path: Telegram/ThirdParty
+          key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
+
 
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
 
-      - name: Build AyuGram binary without ccache
+      - name: Build AyuGram binary
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
@@ -66,68 +55,14 @@ jobs:
             --cpus="3" \
             -u $(id -u):$(id -g) \
             -v "$PWD:/usr/src/tdesktop" \
-            -v "$PWD/git-cache/Implib.so:/usr/src/Implib.so" \
-            -v "$PWD/git-cache/patches:/usr/src/patches" \
-            -v "$PWD/git-cache/zlib:/usr/src/zlib" \
-            -v "$PWD/git-cache/xz:/usr/src/xz" \
-            -v "$PWD/git-cache/protobuf:/usr/src/protobuf" \
-            -v "$PWD/git-cache/Little-CMS:/usr/src/Little-CMS" \
-            -v "$PWD/git-cache/brotli:/usr/src/brotli" \
-            -v "$PWD/git-cache/highway:/usr/src/highway" \
-            -v "$PWD/git-cache/opus:/usr/src/opus" \
-            -v "$PWD/git-cache/dav1d:/usr/src/dav1d" \
-            -v "$PWD/git-cache/openh264:/usr/src/openh264" \
-            -v "$PWD/git-cache/libde265:/usr/src/libde265" \
-            -v "$PWD/git-cache/libvpx:/usr/src/libvpx" \
-            -v "$PWD/git-cache/libwebp:/usr/src/libwebp" \
-            -v "$PWD/git-cache/libavif:/usr/src/libavif" \
-            -v "$PWD/git-cache/libheif:/usr/src/libheif" \
-            -v "$PWD/git-cache/libjxl:/usr/src/libjxl" \
-            -v "$PWD/git-cache/rnnoise:/usr/src/rnnoise" \
-            -v "$PWD/git-cache/xcbproto:/usr/src/xcbproto" \
-            -v "$PWD/git-cache/libxcb:/usr/src/libxcb" \
-            -v "$PWD/git-cache/libxcb-wm:/usr/src/libxcb-wm" \
-            -v "$PWD/git-cache/libxcb-util:/usr/src/libxcb-util" \
-            -v "$PWD/git-cache/libxcb-image:/usr/src/libxcb-image" \
-            -v "$PWD/git-cache/libxcb-keysyms:/usr/src/libxcb-keysyms" \
-            -v "$PWD/git-cache/libxcb-render-util:/usr/src/libxcb-render-util" \
-            -v "$PWD/git-cache/libxcb-cursor:/usr/src/libxcb-cursor" \
-            -v "$PWD/git-cache/libxext:/usr/src/libxext" \
-            -v "$PWD/git-cache/libxtst:/usr/src/libxtst" \
-            -v "$PWD/git-cache/libxfixes:/usr/src/libxfixes" \
-            -v "$PWD/git-cache/libxv:/usr/src/libxv" \
-            -v "$PWD/git-cache/libxrandr:/usr/src/libxrandr" \
-            -v "$PWD/git-cache/libxrender:/usr/src/libxrender" \
-            -v "$PWD/git-cache/libxdamage:/usr/src/libxdamage" \
-            -v "$PWD/git-cache/libxcomposite:/usr/src/libxcomposite" \
-            -v "$PWD/git-cache/wayland:/usr/src/wayland" \
-            -v "$PWD/git-cache/nv-codec-headers:/usr/src/nv-codec-headers" \
-            -v "$PWD/git-cache/FFmpeg:/usr/src/FFmpeg" \
-            -v "$PWD/git-cache/pipewire:/usr/src/pipewire" \
-            -v "$PWD/git-cache/openal-soft:/usr/src/openal-soft" \
-            -v "$PWD/git-cache/openssl:/usr/src/openssl" \
-            -v "$PWD/git-cache/libxkbcommon:/usr/src/libxkbcommon" \
-            -v "$PWD/git-cache/qt5:/usr/src/qt5" \
-            -v "$PWD/git-cache/breakpad:/usr/src/breakpad" \
-            -v "$PWD/git-cache/tg_owt:/usr/src/tg_owt" \
-            -v "$PWD/git-cache/ada:/usr/src/ada" \
-            -v "$PWD/git-cache/tde2e:/usr/src/tde2e" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
 
-      - name: Fix git-cache permissions after Docker
-        run: |
-          if [ -d "./git-cache" ]; then
-            sudo find ./git-cache -type d -exec chmod 755 {} \;
-            sudo find ./git-cache -type f -exec chmod 644 {} \;
-            sudo chown -R $(id -u):$(id -g) ./git-cache
-          fi
-
       - name: Prepare Flatpak build directory
         run: |
-          mkdir ayugram-flatpak-build
+          mkdir -p ayugram-flatpak-build
           cp out/Release/AyuGram ayugram-flatpak-build/
           cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
 
@@ -136,7 +71,7 @@ jobs:
         run: |
           APP_VERSION=$(grep '<release version=' docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml | sed -n 's/.*version="\([^"]*\)".*/\1/p')
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
-          echo "Found version: ${APP_VERSION}"
+          echo "Найдена версия: ${APP_VERSION}"
 
       - name: Build Flatpak package
         working-directory: ./ayugram-flatpak-build
