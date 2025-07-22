@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-flatpak:
-    name: Build and package Flatpak
+  build-and-release:
+    name: Build and Release Flatpak
     runs-on: self-hosted
+    permissions:
+      contents: write
 
     steps:
       - name: Force clean workspace
@@ -19,12 +21,58 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Sync with upstream repository (AyuGram)
+        run: |
+          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git
+          git fetch upstream
+          git checkout dev
+          echo "Слияние изменений из upstream/dev..."
+          git merge upstream/dev --no-edit
+          git push origin dev
+
+      - name: Get latest version and create release tag
+        id: get_version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev)
+          APP_VERSION=${LATEST_TAG#v}
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          RELEASE_TAG="flatpak-${LATEST_TAG}-${TIMESTAMP}"
+
+          echo "Последний тег AyuGram: ${LATEST_TAG}"
+          echo "Версия приложения: ${APP_VERSION}"
+          echo "Тег релиза для этого форка: ${RELEASE_TAG}"
+
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+
+      - name: Update metainfo.xml with new release
+        run: |
+          # Путь к файлу метаданных
+          METAINFO_FILE="docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml"
+          # Получаем текущую дату в нужном формате
+          CURRENT_DATE=$(date +%Y-%m-%d)
+
+          echo "Обновление $METAINFO_FILE для версии ${{ env.APP_VERSION }} от $CURRENT_DATE"
+
+          # Создаем новый XML-блок для релиза.
+          # Мы добавляем новую запись о релизе сразу после тега <releases>, сохраняя историю.
+          sed -i '/<releases>/a \
+          <release version="${{ env.APP_VERSION }}" date="'"$CURRENT_DATE"'">\
+            <description>\
+              <p>Автоматическая сборка Flatpak. Синхронизировано с upstream-тегом ${{ env.LATEST_TAG }}.</p>\
+            </description>\
+          </release>' "$METAINFO_FILE"
+
+          echo "Файл metainfo.xml успешно обновлен."
 
       - name: Verify that required secrets are set
         run: |
           if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
             echo "::error:: Обязательные секреты TDESKTOP_API_ID и/или TDESKTOP_API_HASH не найдены или пусты."
-            echo "::error:: Пожалуйста, проверьте их имена и наличие в Settings -> Secrets and variables -> Actions."
             exit 1
           else
             echo "Секреты успешно найдены."
@@ -39,14 +87,12 @@ jobs:
           flatpak install --user -y --noninteractive org.gnome.Sdk//48
           flatpak install --user -y --noninteractive org.gnome.Platform//48
 
-
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
         uses: actions/cache@v4
         with:
           path: Telegram/ThirdParty
           key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
-
 
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
@@ -71,13 +117,6 @@ jobs:
           cp out/Release/AyuGram ayugram-flatpak-build/
           cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
 
-      - name: Get application version
-        id: get_version
-        run: |
-          APP_VERSION=$(grep '<release version=' docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml | sed -n 's/.*version="\([^"]*\)".*/\1/p')
-          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
-          echo "Найдена версия: ${APP_VERSION}"
-
       - name: Build Flatpak package
         working-directory: ./ayugram-flatpak-build
         run: |
@@ -85,9 +124,14 @@ jobs:
           flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
           flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ayugram-flatpak-package
-          path: ayugram-flatpak-build/ayugram-desktop-*.flatpak
-          retention-days: 15
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (сборка ${{ env.TIMESTAMP }})"
+          body: |
+            Автоматическая сборка Flatpak для AyuGram версии ${{ env.LATEST_TAG }}.
+            Собрано из коммита: ${{ github.sha }}
+
+            [Оригинальный релиз на GitHub](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.LATEST_TAG }})
+          files: ayugram-flatpak-build/ayugram-desktop-${{ env.APP_VERSION }}.flatpak
