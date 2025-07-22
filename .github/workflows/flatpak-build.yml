@@ -51,20 +51,15 @@ jobs:
 
       - name: Update metainfo.xml with new release
         run: |
-          # Путь к файлу метаданных
           METAINFO_FILE="docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml"
-          # Получаем текущую дату в нужном формате
           CURRENT_DATE=$(date +%Y-%m-%d)
-
           echo "Обновление $METAINFO_FILE для версии ${{ env.APP_VERSION }} от $CURRENT_DATE"
-
           sed -i '/<releases>/a \
           <release version="${{ env.APP_VERSION }}" date="'"$CURRENT_DATE"'">\
             <description>\
               <p>Автоматическая сборка Flatpak. Синхронизировано с upstream-тегом ${{ env.LATEST_TAG }}.</p>\
             </description>\
           </release>' "$METAINFO_FILE"
-
           echo "Файл metainfo.xml успешно обновлен."
 
       - name: Verify that required secrets are set
@@ -78,7 +73,7 @@ jobs:
 
       - name: Install dependencies and Flatpak SDK
         run: |
-          sudo dnf install -y flatpak flatpak-builder python3-pip
+          sudo dnf install -y flatpak flatpak-builder python3-pip cpio
           pip3 install --user poetry
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -94,6 +89,24 @@ jobs:
   
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
+
+      - name: Prepare ccache binary for the container
+        run: |
+          mkdir -p ${{ github.workspace }}/ccache-bin
+          cd ${{ github.workspace }}/ccache-bin
+          curl -L -o ccache.rpm http://mirror.centos.org/centos/8-stream/AppStream/x86_64/os/Packages/ccache-3.7.7-1.el8.x86_64.rpm
+          rpm2cpio ccache.rpm | cpio -idmv ./usr/bin/ccache
+          mv usr/bin/ccache .
+          rm -rf usr ccache.rpm
+          echo "ccache binary is ready at ${{ github.workspace }}/ccache-bin/ccache"
+
+      - name: Cache ccache directory
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-ccache-ayugram-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-ayugram-
   
       - name: Build AyuGram binary
         env:
@@ -105,10 +118,16 @@ jobs:
               --cpus="3" \
               -u $(id -u):$(id -g) \
               -v "$PWD:/usr/src/tdesktop" \
+              -v "${{ github.workspace }}/ccache-bin:/opt/ccache-bin" \
+              -v "${{ github.workspace }}/.ccache:/ccache" \
+              -e CCACHE_DIR="/ccache" \
+              -e PATH="/opt/ccache-bin:$PATH" \
               ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
               /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
               -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
-              -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH}
+              -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
+              -D CMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              -D CMAKE_C_COMPILER_LAUNCHER=ccache
 
       - name: Prepare Flatpak build directory
         run: |
