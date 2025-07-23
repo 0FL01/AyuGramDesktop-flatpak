@@ -124,7 +124,7 @@ jobs:
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /bin/bash -c "\
               dnf install -y ccache && \
-              export PATH=\"/usr/lib64/ccache:\$PATH\" && \   # <-- ключевое
+              export PATH=\"/usr/lib64/ccache:\$PATH\" && \ 
               export CCACHE_DIR=/ccache \
               export CCACHE_BASEDIR=/usr/src/tdesktop \
               export CCACHE_COMPRESS=1 \
