@@ -106,30 +106,27 @@ jobs:
   
       - name: Build AyuGram binary
         env:
-           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
-                mkdir -p .ccache
-                docker run --rm \
-                  --cpus="3" \
-                  -u root \
-                  -v "$PWD:/usr/src/tdesktop" \
-                  -v "$PWD/.ccache:/ccache" \
-                  ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-                  /bin/bash -c "\
-                    dnf install -y ccache && \
-                    ln -s /usr/bin/ccache /usr/local/bin/gcc && \
-                    ln -s /usr/bin/ccache /usr/local/bin/g++ && \
-                    ln -s /usr/bin/ccache /usr/local/bin/cc && \
-                    ln -s /usr/bin/ccache /usr/local/bin/c++ && \
-                    export CCACHE_DIR=/ccache && \
-                    export CCACHE_MAXSIZE=2G && \
-                    export PATH=/usr/local/bin:$PATH && \
-                    /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-                      -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
-                      -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
-                      -D USE_CCACHE=ON && \
-                    ccache -s"
+          mkdir -p .ccache
+          docker run --rm \
+            --cpus="3" \
+            -u root \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$PWD/.ccache:/ccache" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /bin/bash -c "\
+              dnf install -y ccache && \
+              export CCACHE_DIR=/ccache && \
+              export CCACHE_MAXSIZE=2G && \
+              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+                -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+                -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
+                -D USE_CCACHE=ON \
+                -D CMAKE_C_COMPILER_LAUNCHER=ccache \
+                -D CMAKE_CXX_COMPILER_LAUNCHER=ccache && \
+              ccache -s"
 
       - name: Prepare Flatpak build directory
         run: |
