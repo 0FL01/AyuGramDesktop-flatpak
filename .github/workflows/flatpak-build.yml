@@ -54,19 +54,20 @@ jobs:
         run: |
           # Путь к файлу метаданных
           METAINFO_FILE="docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml"
-          # Получаем текущую дату в нужном формате
+
+          # Текущая дата в формате YYYY-MM-DD
           CURRENT_DATE=$(date +%Y-%m-%d)
 
-          echo "Обновление $METAINFO_FILE для версии ${{ env.APP_VERSION }} от $CURRENT_DATE"
+          echo "Добавляю release ${{ env.APP_VERSION }} ($CURRENT_DATE) в $METAINFO_FILE"
 
-          sed -i '/<releases>/a \
-          <release version="${{ env.APP_VERSION }}" date="'"$CURRENT_DATE"'">\
-            <description>\
-              <p>Автоматическая сборка Flatpak. Синхронизировано с upstream-тегом ${{ env.LATEST_TAG }}.</p>\
-            </description>\
-          </release>' "$METAINFO_FILE"
+          # Формируем блок release одной строкой (избегаем проблем с переносами внутри XML)
+          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Автоматическая сборка Flatpak. Синхронизировано с upstream-тегом ${{ env.LATEST_TAG }}.</p></description></release>"
 
-          echo "Файл metainfo.xml успешно обновлен."
+          # Вставляем NEW_RELEASE непосредственно перед закрывающим тегом </releases>
+          # Используем '|' как разделитель, чтобы избежать экранирования '/'.
+          sed -i "s|</releases>|${NEW_RELEASE}</releases>|" "$METAINFO_FILE"
+
+          echo "metainfo.xml обновлён"
 
       - name: Verify that required secrets are set
         run: |
