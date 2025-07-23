@@ -106,8 +106,8 @@ jobs:
   
       - name: Build AyuGram binary
         env:
-              TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-              TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
                 mkdir -p .ccache
                 docker run --rm \
@@ -117,17 +117,18 @@ jobs:
                   -v "$PWD/.ccache:/ccache" \
                   ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
                   /bin/bash -c "\
-                    # Установка ccache
                     dnf install -y ccache && \
-                    # Настройка окружения для сборки
+                    ln -s /usr/bin/ccache /usr/local/bin/gcc && \
+                    ln -s /usr/bin/ccache /usr/local/bin/g++ && \
+                    ln -s /usr/bin/ccache /usr/local/bin/cc && \
+                    ln -s /usr/bin/ccache /usr/local/bin/c++ && \
                     export CCACHE_DIR=/ccache && \
                     export CCACHE_MAXSIZE=2G && \
-                    # Запуск сборки с поддержкой ccache
+                    export PATH=/usr/local/bin:$PATH && \
                     /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
                       -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
                       -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
                       -D USE_CCACHE=ON && \
-                    # Проверка статистики кеша
                     ccache -s"
 
       - name: Prepare Flatpak build directory
