@@ -111,32 +111,28 @@ jobs:
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
-          CCACHE_DIR: ${{ runner.tool_cache }}/ccache
-          CCACHE_BASEDIR: ${{ github.workspace }}
-          CCACHE_MAXSIZE: 5G
-          CCACHE_LOGFILE: /ccache/ccache.log   # optional for debug
         run: |
           mkdir -p .ccache
           sudo chmod -R 777 .ccache
+
           docker run --rm \
             --cpus="3" \
+            -u root \
             -v "$PWD:/usr/src/tdesktop" \
-            -v "${CCACHE_DIR}:/ccache" \
+            -v "$PWD/.ccache:/ccache" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-            /bin/bash -c "\
-              dnf install -y ccache && \
-              export PATH=\"/usr/lib64/ccache:\$PATH\" && \ 
-              export CCACHE_DIR=/ccache \
-              export CCACHE_BASEDIR=/usr/src/tdesktop \
-              export CCACHE_COMPRESS=1 \
-              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-                -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
-                -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
-                -D USE_CCACHE=ON \
-                -D CMAKE_C_COMPILER_LAUNCHER=ccache \
-                -D CMAKE_CXX_COMPILER_LAUNCHER=ccache && \
-              ccache -s && \
-              echo 'ccache log: ' && tail -20 /ccache/ccache.log || true"
+            /bin/bash -c "dnf install -y ccache && \
+                          export PATH=/usr/lib64/ccache:\$PATH && \
+                          export CCACHE_DIR=/ccache && \
+                          export CCACHE_BASEDIR=/usr/src/tdesktop && \
+                          export CCACHE_COMPRESS=1 && \
+                          /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+                            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+                            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
+                            -D USE_CCACHE=ON \
+                            -D CMAKE_C_COMPILER_LAUNCHER=ccache \
+                            -D CMAKE_CXX_COMPILER_LAUNCHER=ccache && \
+                          ccache -s"
 
       - name: Prepare Flatpak build directory
         run: |
