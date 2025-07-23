@@ -31,6 +31,7 @@ jobs:
           git checkout dev
           echo "Слияние изменений из upstream/dev..."
           git merge upstream/dev --no-edit
+          git pull --rebase origin dev
           git push origin dev
 
       - name: Get latest version and create release tag
