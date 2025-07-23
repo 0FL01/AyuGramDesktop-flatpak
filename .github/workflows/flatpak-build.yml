@@ -14,8 +14,9 @@ jobs:
       - name: Force clean workspace
         run: |
           echo "Принудительная очистка рабочей директории..."
-          sudo rm -rf ./* || true
-          sudo rm -rf ./.git* || true
+          sudo chown -R $USER:$USER . || true  # Изменяем владельца файлов
+          sudo rm -rf ./* .ccache .git* || true  # Явное удаление .ccache
+          sudo find . -path . -prune -o -exec rm -rf {} + || true  # Дополнительная очистка
 
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
@@ -110,6 +111,7 @@ jobs:
           TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           mkdir -p .ccache
+          sudo chmod -R 777 .ccache
           docker run --rm \
             --cpus="3" \
             -u root \
