@@ -10,7 +10,7 @@
 
 ### Способ 1: Готовый пакет (Рекомендуемый)
 
-1.  Перейдите на страницу [**Releases**](https://github.com/OFL01/AyuGramDesktop-flatpak/releases) этого репозитория.
+1.  Перейдите на страницу [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) этого репозитория.
 2.  Скачайте последний `.flatpak` файл из раздела "Assets".
 3.  Откройте терминал в папке со скачанным файлом и выполните команду для установки:
     ```bash
