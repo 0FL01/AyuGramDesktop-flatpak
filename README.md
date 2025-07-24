@@ -4,7 +4,7 @@
 
 Это форк [AyuGramDesktop](https://github.com/AyuGram/AyuGramDesktop), предназначенный для сборки и распространения Flatpak-пакетов.
 
-В этом репозитории вы найдете готовые Flatpak-сборки на странице [**Releases**](https://github.com/OFL01/AyuGramDesktop-flatpak/releases), а также все необходимые файлы для самостоятельной сборки из исходного кода.
+В этом репозитории вы найдете готовые Flatpak-сборки на странице [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases), а также все необходимые файлы для самостоятельной сборки из исходного кода.
 
 ## Установка
 
