@@ -1,8 +1,34 @@
-# AyuGram
+# AyuGram Flatpak
 
-![AyuGram Logo](.github/AyuGram.png) ![AyuChan](.github/AyuChan.png)
+![AyuGram Logo](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuGram.png) ![AyuChan](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuChan.png)
 
-[ English  |   [Русский](README-RU.md) ]
+Это форк [AyuGramDesktop](https://github.com/AyuGram/AyuGramDesktop), предназначенный для сборки и распространения Flatpak-пакетов.
+
+В этом репозитории вы найдете готовые Flatpak-сборки на странице [**Releases**](https://github.com/OFL01/AyuGramDesktop-flatpak/releases), а также все необходимые файлы для самостоятельной сборки из исходного кода.
+
+## Установка
+
+### Способ 1: Готовый пакет (Рекомендуемый)
+
+1.  Перейдите на страницу [**Releases**](https://github.com/OFL01/AyuGramDesktop-flatpak/releases) этого репозитория.
+2.  Скачайте последний `.flatpak` файл из раздела "Assets".
+3.  Откройте терминал в папке со скачанным файлом и выполните команду для установки:
+    ```bash
+    flatpak install ayugram-desktop-*.flatpak
+    ```
+
+### Способ 2: Сборка из исходников
+
+Для самостоятельной сборки пакета из исходного кода, пожалуйста, следуйте официальному руководству:
+
+[**Руководство по сборке Flatpak**](https://github.com/0FL01/AyuGramDesktop-flatpak/blob/dev/docs/building-flatpak.md)
+
+---
+
+<details>
+<summary><strong>Информация об оригинальном проекте AyuGram (нажмите, чтобы развернуть)</strong></summary>
+
+[ English | [Русский](https://github.com/AyuGram/AyuGramDesktop/blob/dev/README-RU.md) ]
 
 ## Features
 
@@ -20,10 +46,10 @@ And many more. Check out our [Documentation](https://docs.ayugram.one/desktop/).
 <h3>
   <details>
     <summary>Preferences screenshots</summary>
-    <img src='.github/demos/demo1.png' width='268'>
-    <img src='.github/demos/demo2.png' width='268'>
-    <img src='.github/demos/demo3.png' width='268'>
-    <img src='.github/demos/demo4.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo1.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo2.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo3.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo4.png' width='268'>
   </details>
 </h3>
 
@@ -130,3 +156,5 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 ### Bots
 
 - [TelegramDB](https://t.me/tgdatabase) for username lookup by ID
+
+</details>
