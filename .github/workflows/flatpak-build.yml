@@ -13,10 +13,10 @@ jobs:
     steps:
       - name: Force clean workspace
         run: |
-          echo "Принудительная очистка рабочей директории..."
-          sudo chown -R $USER:$USER . || true  # Изменяем владельца файлов
-          sudo rm -rf ./* .ccache .git* || true  # Явное удаление .ccache
-          sudo find . -path . -prune -o -exec rm -rf {} + || true  # Дополнительная очистка
+          echo "Forcing workspace cleanup..."
+          sudo chown -R $USER:$USER . || true  # Change file ownership
+          sudo rm -rf ./* .ccache .git* || true  # Explicitly remove .ccache
+          sudo find . -path . -prune -o -exec rm -rf {} + || true  # Additional cleanup
 
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
           git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git
           git fetch upstream
           git checkout dev
-          echo "Слияние изменений из upstream/dev..."
+          echo "Merging changes from upstream/dev..."
           git merge upstream/dev --no-edit
           git pull --rebase origin dev
           git push origin dev
@@ -42,41 +42,46 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           RELEASE_TAG="flatpak-${LATEST_TAG}-${TIMESTAMP}"
 
-          echo "Последний тег AyuGram: ${LATEST_TAG}"
-          echo "Версия приложения: ${APP_VERSION}"
-          echo "Тег релиза для этого форка: ${RELEASE_TAG}"
+          echo "Latest AyuGram tag: ${LATEST_TAG}"
+          echo "Application version: ${APP_VERSION}"
+          echo "Release tag for this fork: ${RELEASE_TAG}"
 
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
           echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
           echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
           echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
 
+          # Get the current commit hash in upstream/dev to use it in the release description
+          UPSTREAM_COMMIT=$(git rev-parse upstream/dev)
+          echo "Commit hash upstream/dev: ${UPSTREAM_COMMIT}"
+          echo "UPSTREAM_COMMIT=${UPSTREAM_COMMIT}" >> $GITHUB_ENV
+
       - name: Update metainfo.xml with new release
         run: |
-          # Путь к файлу метаданных
+          # Path to the metadata file
           METAINFO_FILE="docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml"
 
-          # Текущая дата в формате YYYY-MM-DD
+          # Current date in YYYY-MM-DD format
           CURRENT_DATE=$(date +%Y-%m-%d)
 
-          echo "Добавляю release ${{ env.APP_VERSION }} ($CURRENT_DATE) в $METAINFO_FILE"
+          echo "Adding release ${{ env.APP_VERSION }} ($CURRENT_DATE) to $METAINFO_FILE"
 
-          # Формируем блок release одной строкой (избегаем проблем с переносами внутри XML)
-          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Автоматическая сборка Flatpak. Синхронизировано с upstream-тегом ${{ env.LATEST_TAG }}.</p></description></release>"
+          # Form the release block as a single line (avoid issues with newlines inside XML)
+          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Automatic Flatpak build. Synchronized with upstream tag ${{ env.LATEST_TAG }}.</p></description></release>"
 
-          # Вставляем NEW_RELEASE непосредственно перед закрывающим тегом </releases>
-          # Используем '|' как разделитель, чтобы избежать экранирования '/'.
+          # Insert NEW_RELEASE directly before the closing </releases> tag
+          # Use '|' as a delimiter to avoid escaping '/'.
           sed -i "s|</releases>|${NEW_RELEASE}</releases>|" "$METAINFO_FILE"
 
-          echo "metainfo.xml обновлён"
+          echo "metainfo.xml updated"
 
       - name: Verify that required secrets are set
         run: |
           if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
-            echo "::error:: Обязательные секреты TDESKTOP_API_ID и/или TDESKTOP_API_HASH не найдены или пусты."
+            echo "::error:: Required secrets TDESKTOP_API_ID and/or TDESKTOP_API_HASH not found or empty."
             exit 1
           else
-            echo "Секреты успешно найдены."
+            echo "Secrets found successfully."
           fi
 
       - name: Install dependencies and Flatpak SDK
@@ -151,10 +156,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (сборка ${{ env.TIMESTAMP }})"
+          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (build ${{ env.TIMESTAMP }})"
           body: |
-            Автоматическая сборка Flatpak для AyuGram версии ${{ env.LATEST_TAG }}.
-            Собрано из коммита: ${{ github.sha }}
+            Automatic Flatpak build for AyuGram version ${{ env.LATEST_TAG }}.
+            Built from commit: ${{ env.UPSTREAM_COMMIT }}
 
-            [Оригинальный релиз на GitHub](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.LATEST_TAG }})
+            [Original GitHub release](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.LATEST_TAG }})
           files: ayugram-flatpak-build/ayugram-desktop-${{ env.APP_VERSION }}.flatpak
