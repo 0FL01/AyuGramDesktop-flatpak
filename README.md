@@ -1,32 +1,34 @@
+
+
 # AyuGram Flatpak
 
 ![AyuGram Logo](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuGram.png) ![AyuChan](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuChan.png)
 
-Это форк [AyuGramDesktop](https://github.com/AyuGram/AyuGramDesktop), предназначенный для сборки и распространения Flatpak-пакетов.
+This is a fork of [AyuGramDesktop](https://github.com/AyuGram/AyuGramDesktop) designed for building and distributing Flatpak packages.
 
-В этом репозитории вы найдете готовые Flatpak-сборки на странице [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases), а также все необходимые файлы для самостоятельной сборки из исходного кода.
+In this repository, you will find ready-to-use Flatpak builds on the [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) page, as well as all the necessary files to build from source code yourself.
 
-## Установка
+## Installation
 
-### Способ 1: Готовый пакет (Рекомендуемый)
+### Method 1: Pre-built Package (Recommended)
 
-1.  Перейдите на страницу [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) этого репозитория.
-2.  Скачайте последний `.flatpak` файл из раздела "Assets".
-3.  Откройте терминал в папке со скачанным файлом и выполните команду для установки:
+1.  Go to the [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) page of this repository.
+2.  Download the latest `.flatpak` file from the "Assets" section.
+3.  Open a terminal in the folder with the downloaded file and run the installation command:
     ```bash
     flatpak install ayugram-desktop-*.flatpak
     ```
 
-### Способ 2: Сборка из исходников
+### Method 2: Building from Source
 
-Для самостоятельной сборки пакета из исходного кода, пожалуйста, следуйте официальному руководству:
+To build the package from source code yourself, please follow the official guide:
 
-[**Руководство по сборке Flatpak**](https://github.com/0FL01/AyuGramDesktop-flatpak/blob/dev/docs/building-flatpak.md)
+[**Flatpak Building Guide**](https://github.com/0FL01/AyuGramDesktop-flatpak/blob/dev/docs/building-flatpak.md)
 
 ---
 
 <details>
-<summary><strong>Информация об оригинальном проекте AyuGram (нажмите, чтобы развернуть)</strong></summary>
+<summary><strong>Information about the original AyuGram project (click to expand)</strong></summary>
 
 [ English | [Русский](https://github.com/AyuGram/AyuGramDesktop/blob/dev/README-RU.md) ]
 
@@ -158,3 +160,4 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 - [TelegramDB](https://t.me/tgdatabase) for username lookup by ID
 
 </details>
+
