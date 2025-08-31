@@ -106,7 +106,7 @@ jobs:
             -e CCACHE_DIR=/ccache \
             -e CCACHE_BASEDIR=/usr/src/tdesktop \
             -e CCACHE_COMPRESS=1 \
-            -e CCACHE_HASHDIR=false \
+            -e CCACHE_HASHDIR=0 \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$PWD/.ccache:/ccache" \
             tdesktop:centos_env \
