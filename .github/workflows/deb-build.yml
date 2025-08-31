@@ -103,23 +103,20 @@ jobs:
           docker run --rm \
             --cpus="3" \
             -u root \
-            -e CCACHE_DIR=/ccache \
-            -e CCACHE_BASEDIR=/usr/src/tdesktop \
-            -e CCACHE_COMPRESS=1 \
-            -e CCACHE_HASHDIR=0 \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$PWD/.ccache:/ccache" \
-            tdesktop:centos_env \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
             /bin/bash -c "dnf install -y ccache && \
                           export PATH=/usr/lib64/ccache:\$PATH && \
-                          ccache --set-config=compiler_check=content && \
-                          ccache --set-config=max_size=10G && \
-                          ccache -z && \
+                          export CCACHE_DIR=/ccache && \
+                          export CCACHE_BASEDIR=/usr/src/tdesktop && \
+                          export CCACHE_COMPRESS=1 && \
+                          export CC='ccache gcc' && \
+                          export CXX='ccache g++' && \
                           /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
                             -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
                             -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
-                            -D CMAKE_C_COMPILER_LAUNCHER=ccache \
-                            -D CMAKE_CXX_COMPILER_LAUNCHER=ccache && \
+                            -D USE_CCACHE=ON && \
                           ccache -s"
 
       - name: Prepare Debian package directory
