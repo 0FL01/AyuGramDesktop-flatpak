@@ -6,7 +6,7 @@ on:
 jobs:
   build-and-release-deb:
     name: Build and Release .deb (Debian 13)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: write
 
@@ -68,9 +68,9 @@ jobs:
 
       - name: Install build dependencies (host)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            docker.io python3-pip ccache dpkg-dev fakeroot
+          sudo dnf -y makecache
+          sudo dnf -y install \
+            python3-pip ccache dpkg fakeroot
           pip3 install --user poetry
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
@@ -153,8 +153,8 @@ jobs:
             sed -i 's|^Exec=.*|Exec=/usr/bin/ayugram-desktop|' ayugram-deb-build/pkgroot/usr/share/dbus-1/services/com.ayugram.desktop.service
           fi
 
-          # Control file
-          ARCH=$(dpkg --print-architecture)
+          # Control file (hardcode Architecture)
+          ARCH=amd64
           cat > ayugram-deb-build/pkgroot/DEBIAN/control << CONTROL
           Package: ayugram-desktop
           Version: ${APP_VERSION}
@@ -172,7 +172,7 @@ jobs:
         working-directory: ./ayugram-deb-build
         run: |
           set -e
-          ARCH=$(dpkg --print-architecture)
+          ARCH=amd64
           DEB_NAME="ayugram-desktop_${APP_VERSION}_${ARCH}.deb"
           fakeroot dpkg-deb --build --root-owner-group pkgroot "$DEB_NAME"
           echo "DEB_NAME=$DEB_NAME" >> $GITHUB_ENV
