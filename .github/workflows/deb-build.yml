@@ -162,7 +162,7 @@ jobs:
           Priority: optional
           Maintainer: AyuGram CI <noreply@github.com>
           Architecture: ${ARCH}
-          Depends: libc6 (>= 2.34), libstdc++6 (>= 12), libgcc-s1, libwayland-client0, libpulse0, zlib1g, libxcb1, libxkbcommon0, libdbus-1-3, libfontconfig1, libfreetype6, libglib2.0-0
+          Depends: libc6 (>= 2.34), libstdc++6 (>= 12), libgcc-s1, libwayland-client0, libpulse0, zlib1g, libxcb1, libxkbcommon0, libdbus-1-3, libfontconfig1, libfreetype6, libglib2.0-0t64, libgl1, libegl1, libwebkit2gtk-4.1-0
           Homepage: https://github.com/AyuGram/AyuGramDesktop
           Description: AyuGram Desktop packaged for Debian 13 (Wayland-ready)
            Unofficial Telegram client. Prefers Wayland when available.
