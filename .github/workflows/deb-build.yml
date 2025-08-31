@@ -1,0 +1,195 @@
+name: Build AyuGram Debian package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release-deb:
+    name: Build and Release .deb (Debian 13)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Force clean workspace
+        run: |
+          echo "Forcing workspace cleanup..."
+          sudo chown -R $USER:$USER . || true
+          sudo rm -rf ./* .ccache .git* || true
+          sudo find . -path . -prune -o -exec rm -rf {} + || true
+
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Sync with upstream repository (AyuGram)
+        run: |
+          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git
+          git fetch upstream
+          git checkout dev
+          echo "Merging changes from upstream/dev..."
+          git merge upstream/dev --no-edit
+          git pull --rebase origin dev
+          git push origin dev
+
+      - name: Get latest version and create release tag
+        id: get_version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev)
+          APP_VERSION=${LATEST_TAG#v}
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          RELEASE_TAG="deb-${LATEST_TAG}-${TIMESTAMP}"
+
+          echo "Latest AyuGram tag: ${LATEST_TAG}"
+          echo "Application version: ${APP_VERSION}"
+          echo "Release tag for this fork: ${RELEASE_TAG}"
+
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+
+          UPSTREAM_COMMIT=$(git rev-parse upstream/dev)
+          echo "UPSTREAM_COMMIT=${UPSTREAM_COMMIT}" >> $GITHUB_ENV
+
+      - name: Verify that required secrets are set
+        run: |
+          if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
+            echo "::error:: Required secrets TDESKTOP_API_ID and/or TDESKTOP_API_HASH not found or empty."
+            exit 1
+          else
+            echo "Secrets found successfully."
+          fi
+
+      - name: Install build dependencies (host)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            docker.io python3-pip ccache dpkg-dev fakeroot
+          pip3 install --user poetry
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache TDesktop Dependencies
+        id: cache-tdesktop-deps
+        uses: actions/cache@v4
+        with:
+          path: Telegram/ThirdParty
+          key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
+
+      - name: Prepare libraries
+        run: ./Telegram/build/prepare/linux.sh
+
+      - name: Cache ccache data
+        uses: actions/cache@v4
+        id: cache-ccache
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Build AyuGram binary
+        env:
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          mkdir -p .ccache
+          sudo chmod -R 777 .ccache
+          docker run --rm \
+            --cpus="3" \
+            -u root \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$PWD/.ccache:/ccache" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /bin/bash -c "dnf install -y ccache && \
+                          export PATH=/usr/lib64/ccache:\$PATH && \
+                          export CCACHE_DIR=/ccache && \
+                          export CCACHE_BASEDIR=/usr/src/tdesktop && \
+                          export CCACHE_COMPRESS=1 && \
+                          export CC='ccache gcc' && \
+                          export CXX='ccache g++' && \
+                          /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+                            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+                            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
+                            -D USE_CCACHE=ON && \
+                          ccache -s"
+
+      - name: Prepare Debian package directory
+        run: |
+          set -e
+          mkdir -p ayugram-deb-build/pkgroot/DEBIAN
+          mkdir -p ayugram-deb-build/pkgroot/usr/bin
+          mkdir -p ayugram-deb-build/pkgroot/usr/lib/ayugram
+          mkdir -p ayugram-deb-build/pkgroot/usr/share
+
+          # Binary
+          install -Dm755 out/Release/AyuGram ayugram-deb-build/pkgroot/usr/lib/ayugram/AyuGram
+
+          # Resources from flatpak files
+          cp -a docs/assets/flatpak-files/usr/share/* ayugram-deb-build/pkgroot/usr/share/
+
+          # Wayland-aware launcher wrapper
+          cat > ayugram-deb-build/pkgroot/usr/bin/ayugram-desktop << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            export QT_QPA_PLATFORM=wayland
+            export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+          fi
+          exec /usr/lib/ayugram/AyuGram "$@"
+          EOF
+          chmod +x ayugram-deb-build/pkgroot/usr/bin/ayugram-desktop
+
+          # Fix Exec lines to use wrapper
+          if [ -f ayugram-deb-build/pkgroot/usr/share/applications/com.ayugram.desktop.desktop ]; then
+            sed -i 's|^Exec=.*|Exec=ayugram-desktop %u|' ayugram-deb-build/pkgroot/usr/share/applications/com.ayugram.desktop.desktop
+          fi
+          if [ -f ayugram-deb-build/pkgroot/usr/share/dbus-1/services/com.ayugram.desktop.service ]; then
+            sed -i 's|^Exec=.*|Exec=/usr/bin/ayugram-desktop|' ayugram-deb-build/pkgroot/usr/share/dbus-1/services/com.ayugram.desktop.service
+          fi
+
+          # Control file
+          ARCH=$(dpkg --print-architecture)
+          cat > ayugram-deb-build/pkgroot/DEBIAN/control << CONTROL
+          Package: ayugram-desktop
+          Version: ${APP_VERSION}
+          Section: net
+          Priority: optional
+          Maintainer: AyuGram CI <noreply@github.com>
+          Architecture: ${ARCH}
+          Depends: libc6 (>= 2.34), libstdc++6 (>= 12), libgcc-s1, libwayland-client0, libpulse0, zlib1g, libxcb1, libxkbcommon0, libdbus-1-3, libfontconfig1, libfreetype6, libglib2.0-0
+          Homepage: https://github.com/AyuGram/AyuGramDesktop
+          Description: AyuGram Desktop packaged for Debian 13 (Wayland-ready)
+           Unofficial Telegram client. Prefers Wayland when available.
+          CONTROL
+
+      - name: Build .deb package
+        working-directory: ./ayugram-deb-build
+        run: |
+          set -e
+          ARCH=$(dpkg --print-architecture)
+          DEB_NAME="ayugram-desktop_${APP_VERSION}_${ARCH}.deb"
+          fakeroot dpkg-deb --build --root-owner-group pkgroot "$DEB_NAME"
+          echo "DEB_NAME=$DEB_NAME" >> $GITHUB_ENV
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ayugram-desktop-${{ env.APP_VERSION }}-deb
+          path: ayugram-deb-build/${{ env.DEB_NAME }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "AyuGram ${{ env.APP_VERSION }} Debian (build ${{ env.TIMESTAMP }})"
+          body: |
+            Automatic Debian (.deb) build for AyuGram version ${{ env.LATEST_TAG }}.
+            Built from commit: ${{ env.UPSTREAM_COMMIT }}
+
+            Tested for Debian 13 (Trixie). Uses Wayland when available.
+          files: ayugram-deb-build/${{ env.DEB_NAME }}
+
+
