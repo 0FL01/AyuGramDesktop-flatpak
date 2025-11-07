@@ -27,10 +27,19 @@ jobs:
       - name: Sync with upstream repository (AyuGram)
         run: |
           # Добавляем вышестоящий (upstream) репозиторий
-          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git
+          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
 
-          # Получаем все актуальные данные из него
-          git fetch upstream
+          # Сохраняем файлы Flatpak-пакетирования до жёсткого сброса
+          PACKAGING_DIR="docs/assets/flatpak-files"
+          if [ -d "$PACKAGING_DIR" ]; then
+            echo "Backing up $PACKAGING_DIR before reset..."
+            rm -rf /tmp/flatpak-files-backup
+            mkdir -p /tmp/flatpak-files-backup
+            cp -a "$PACKAGING_DIR/." /tmp/flatpak-files-backup/
+          fi
+
+          # Получаем все актуальные данные и теги из upstream
+          git fetch upstream --tags
 
           # Переключаемся на нашу локальную ветку dev
           git checkout dev
@@ -47,12 +56,18 @@ jobs:
           echo "Force pushing the updated dev branch to origin..."
           git push origin dev --force
 
+          # Восстанавливаем файлы Flatpak-пакетирования в рабочую директорию (локально, без коммита)
+          if [ -d "/tmp/flatpak-files-backup" ]; then
+            echo "Restoring $PACKAGING_DIR after reset..."
+            mkdir -p "$PACKAGING_DIR"
+            cp -a /tmp/flatpak-files-backup/. "$PACKAGING_DIR/"
+          fi
+
       - name: Get latest version and create release tag
         id: get_version
         run: |
-          cd upstream-src
-          # Получаем последний тег из исходников upstream
-          LATEST_TAG=$(git describe --tags --abbrev=0 || git tag --sort=-v:refname | head -n 1)
+          # Определяем последний тег в upstream/dev (нужны теги, уже подтянуты на предыдущем шаге)
+          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev)
           APP_VERSION=${LATEST_TAG#v}
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           RELEASE_TAG="flatpak-${LATEST_TAG}-${TIMESTAMP}"
