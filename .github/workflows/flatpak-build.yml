@@ -24,13 +24,28 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Checkout upstream source (AyuGram)
+      - name: Sync with upstream repository (AyuGram)
         run: |
-          echo "Cloning upstream AyuGramDesktop into ./upstream-src..."
-          git clone --branch dev --depth 1 https://github.com/AyuGram/AyuGramDesktop.git upstream-src
-          cd upstream-src
-          # Подтягиваем теги, чтобы корректно определить последнюю версию
-          git fetch --tags --force --no-recurse-submodules
+          # Добавляем вышестоящий (upstream) репозиторий
+          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git
+
+          # Получаем все актуальные данные из него
+          git fetch upstream
+
+          # Переключаемся на нашу локальную ветку dev
+          git checkout dev
+
+          # Устанавливаем личность бота для выполнения команд Git
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          echo "Resetting local dev branch to match upstream/dev..."
+          git reset --hard upstream/dev
+
+          # Принудительно отправляем обновленную ветку в наш форк (origin)
+          # Флаг --force необходим, так как мы перезаписали историю коммитов.
+          echo "Force pushing the updated dev branch to origin..."
+          git push origin dev --force
 
       - name: Get latest version and create release tag
         id: get_version
