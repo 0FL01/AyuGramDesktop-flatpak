@@ -50,7 +50,9 @@ jobs:
       - name: Get latest version and create release tag
         id: get_version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev)
+          cd upstream-src
+          # Получаем последний тег из исходников upstream
+          LATEST_TAG=$(git describe --tags --abbrev=0 || git tag --sort=-v:refname | head -n 1)
           APP_VERSION=${LATEST_TAG#v}
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           RELEASE_TAG="flatpak-${LATEST_TAG}-${TIMESTAMP}"
