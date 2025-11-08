@@ -108,10 +108,10 @@ jobs:
           # Current date in YYYY-MM-DD format
           CURRENT_DATE=$(date +%Y-%m-%d)
 
-          echo "Adding release ${{ env.APP_VERSION }} ($CURRENT_DATE) to $METAINFO_FILE"
+          echo "Adding release ${{ env.LATEST_TAG }} ($CURRENT_DATE) to $METAINFO_FILE"
 
           # Form the release block as a single line (avoid issues with newlines inside XML)
-          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Automatic Flatpak build. Synchronized with upstream tag ${{ env.LATEST_TAG }}.</p></description></release>"
+          NEW_RELEASE="  <release version=\"${{ env.LATEST_TAG }}\" date=\"${CURRENT_DATE}\"><description><p>Automatic Flatpak build. Synchronized with upstream tag ${{ env.LATEST_TAG }}.</p></description></release>"
 
           # Insert NEW_RELEASE directly before the closing </releases> tag
           # Use '|' as a delimiter to avoid escaping '/'.
