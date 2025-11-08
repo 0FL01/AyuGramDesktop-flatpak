@@ -155,8 +155,36 @@ jobs:
             ${{ runner.os }}-qt6-${{ env.LATEST_TAG }}-
             ${{ runner.os }}-qt6-
   
+      - name: Inspect Qt6 cache (pre-prepare)
+        run: |
+          echo "Qt6 cache hit: ${{ steps.cache-qt6-restore.outputs.cache-hit }}"
+          if [ -d "Libraries/qt6" ]; then
+            echo "Qt6 size (pre):"
+            du -sh Libraries/qt6 || true
+            echo "Qt6 top-level dirs (pre):"
+            ls -1d Libraries/qt6/*/ | head -n 10 || true
+          else
+            echo "Libraries/qt6 not present (pre)"
+          fi
+  
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
+  
+      - name: Inspect Qt6 cache (post-prepare)
+        run: |
+          if [ -d "Libraries/qt6" ]; then
+            echo "Qt6 size (post):"
+            du -sh Libraries/qt6 || true
+            echo "Qt6 top-level dirs (post):"
+            ls -1d Libraries/qt6/*/ | head -n 10 || true
+          else
+            echo "Libraries/qt6 not present (post)"
+          fi
+  
+      - name: Announce Qt6 cache save key
+        if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
+        run: |
+          echo "Saving Qt6 cache with key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}"
   
       - name: Save Qt6 libraries cache
         if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
