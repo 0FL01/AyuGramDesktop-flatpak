@@ -9,6 +9,7 @@ jobs:
     runs-on: self-hosted
     permissions:
       contents: write
+    timeout-minutes: 1440
 
     steps:
       - name: Force clean workspace
