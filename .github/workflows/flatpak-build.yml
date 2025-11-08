@@ -78,6 +78,12 @@ jobs:
           echo "Force pushing the updated dev branch to origin..."
           git push origin dev --force
 
+      - name: Initialize submodules for upstream/dev
+        run: |
+          echo "Syncing and updating git submodules..."
+          git submodule sync --recursive
+          git submodule update --init --force --recursive
+
       - name: Get latest version and create release tag
         id: get_version
         run: |
