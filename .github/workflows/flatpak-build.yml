@@ -33,7 +33,7 @@ jobs:
           # Сохраняем каталоги, которые нельзя перезаписывать
           PRESERVE_BACKUP_ROOT="/tmp/preserve-backup-$$"
           mkdir -p "$PRESERVE_BACKUP_ROOT"
-          for path in docs .github; do
+          for path in docs .github README.md; do
             if [ -e "$path" ]; then
               echo "Backing up $path before reset..."
               cp -a "$path" "$PRESERVE_BACKUP_ROOT/"
@@ -55,7 +55,7 @@ jobs:
 
           # Восстанавливаем каталоги, которые нельзя перезаписывать, и коммитим изменения
           CHANGES_MADE=false
-          for path in docs .github; do
+          for path in docs .github README.md; do
             if [ -e "$PRESERVE_BACKUP_ROOT/$path" ]; then
               echo "Restoring $path after reset..."
               rm -rf "$path"
