@@ -145,8 +145,25 @@ jobs:
             path: Telegram/ThirdParty
             key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
   
+      - name: Restore Qt6 libraries cache
+        id: cache-qt6-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: Libraries/qt6
+          key: ${{ runner.os }}-qt6-${{ env.LATEST_TAG }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-qt6-${{ env.LATEST_TAG }}-
+            ${{ runner.os }}-qt6-
+  
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
+  
+      - name: Save Qt6 libraries cache
+        if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Libraries/qt6
+          key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}
   
       - name: Cache ccache data
         uses: actions/cache@v4
