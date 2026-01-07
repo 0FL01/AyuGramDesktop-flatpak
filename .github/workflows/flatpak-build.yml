@@ -82,7 +82,13 @@ jobs:
         run: |
           echo "Syncing and updating git submodules..."
           git submodule sync --recursive
-          git submodule update --init --force --recursive
+          # Пытаемся обновить подмодули. Если ошибка - пробуем использовать upstream для lib_ui
+          if ! git submodule update --init --force --recursive; then
+            echo "Submodule update failed. Suggesting upstream URL for Telegram/lib_ui..."
+            git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
+            git submodule sync --recursive
+            git submodule update --init --force --recursive
+          fi
 
       - name: Get latest version and create release tag
         id: get_version
