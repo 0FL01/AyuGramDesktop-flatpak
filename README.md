@@ -1,8 +1,36 @@
-# AyuGram
 
-![AyuGram Logo](.github/AyuGram.png) ![AyuChan](.github/AyuChan.png)
 
-[ English  |   [Русский](README-RU.md) ]
+# AyuGram Flatpak
+
+![AyuGram Logo](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuGram.png) ![AyuChan](https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/AyuChan.png)
+
+This is a fork of [AyuGramDesktop](https://github.com/AyuGram/AyuGramDesktop) designed for building and distributing Flatpak packages.
+
+In this repository, you will find ready-to-use Flatpak builds on the [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) page, as well as all the necessary files to build from source code yourself.
+
+## Installation
+
+### Method 1: Pre-built Package (Recommended)
+
+1.  Go to the [**Releases**](https://github.com/0FL01/AyuGramDesktop-flatpak/releases) page of this repository.
+2.  Download the latest `.flatpak` file from the "Assets" section.
+3.  Open a terminal in the folder with the downloaded file and run the installation command:
+    ```bash
+    flatpak install ayugram-desktop-*.flatpak
+    ```
+
+### Method 2: Building from Source
+
+To build the package from source code yourself, please follow the official guide:
+
+[**Flatpak Building Guide**](https://github.com/0FL01/AyuGramDesktop-flatpak/blob/dev/docs/building-flatpak.md)
+
+---
+
+<details>
+<summary><strong>Information about the original AyuGram project (click to expand)</strong></summary>
+
+[ English | [Русский](https://github.com/AyuGram/AyuGramDesktop/blob/dev/README-RU.md) ]
 
 ## Features
 
@@ -12,7 +40,6 @@
 - Font customization
 - Streamer mode
 - Local Telegram Premium
-- Translator
 - Media preview & quick reaction on force click (macOS)
 - Enhanced appearance
 
@@ -20,18 +47,11 @@ And many more. Check out our [Documentation](https://docs.ayugram.one/desktop/).
 
 <h3>
   <details>
-    <summary>Preview</summary>
-    <table>
-      <tr>
-        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
-        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
-        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
-      </tr>
-      <tr>
-        <td><img src='.github/demos/demo4.png' width='268' alt='Appearance'></td>
-        <td><img src='.github/demos/demo5.png' width='268' alt='Chats'></td>
-      </tr>
-    </table>
+    <summary>Preferences screenshots</summary>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo1.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo2.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo3.png' width='268'>
+    <img src='https://raw.githubusercontent.com/AyuGram/AyuGramDesktop/dev/.github/demos/demo4.png' width='268'>
   </details>
 </h3>
 
@@ -94,19 +114,13 @@ See [this repository](https://github.com/ayugram-port/ayugram-desktop) for insta
 
 [Sisyphus](https://packages.altlinux.org/en/sisyphus/srpms/ayugram-desktop/)
 
-### Gentoo Linux
-
-See [this repository](https://github.com/OverLessArtem/ayugram-ebuild-gentoo) for installation manual.
-
 ### EPM
 
 `epm play ayugram`
 
 ### Any other Linux distro
 
-Flatpak: https://github.com/0FL01/AyuGramDesktop-flatpak
-
-Or follow the [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
+Follow the [official guide](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
 
 ### Remarks for Windows
 
@@ -136,7 +150,6 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 - [JSON for Modern C++](https://github.com/nlohmann/json)
 - [SQLite](https://github.com/sqlite/sqlite)
 - [sqlite_orm](https://github.com/fnc12/sqlite_orm)
-- [androidx sources](https://github.com/androidx/androidx)
 
 ### Icons
 
@@ -145,3 +158,5 @@ Enjoy using **AyuGram**? Consider sending us a tip!
 ### Bots
 
 - [TelegramDB](https://t.me/tgdatabase) for username lookup by ID
+
+</details>
