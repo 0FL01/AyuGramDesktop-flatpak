@@ -41,7 +41,7 @@ jobs:
           done
 
           # Получаем все актуальные данные и теги из upstream
-          git fetch upstream --tags
+          git fetch upstream --tags --no-recurse-submodules
 
           # Переключаемся на нашу локальную ветку dev
           git checkout dev
@@ -86,7 +86,6 @@ jobs:
           if ! git submodule update --init --force --recursive; then
             echo "Submodule update failed. Suggesting upstream URL for Telegram/lib_ui..."
             git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
-            git submodule sync --recursive
             git submodule update --init --force --recursive
           fi
 
