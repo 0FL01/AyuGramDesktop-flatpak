@@ -11,7 +11,7 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --socket=pulseaudio
-  - --device=dri
+  - --device=all
   - --share=network
   - --filesystem=xdg-download
   - --talk-name=org.kde.StatusNotifierWatcher
@@ -27,7 +27,7 @@ modules:
   - name: ayugram-repack
     buildsystem: simple
     build-commands:
-      - sed -i 's|^Exec=.*|Exec=ayugram-desktop -- %%u|' usr/share/applications/com.ayugram.desktop.desktop
+      - sed -i 's|^Exec=.*|Exec=ayugram-desktop -- @@u %U @@|' usr/share/applications/com.ayugram.desktop.desktop
       - sed -i 's|^Exec=.*|Exec=/app/bin/ayugram-desktop|' usr/share/dbus-1/services/com.ayugram.desktop.service
       - install -d /app/share/
       - install -Dm755 AyuGram /app/bin/ayugram-desktop
