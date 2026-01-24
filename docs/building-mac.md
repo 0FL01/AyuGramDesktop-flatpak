@@ -1,9 +1,5 @@
 ## Build instructions for macOS
 
-### Note
-
-The build has only been tested with Xcode 26.1. Although it may work on lower Xcode versions, this is not guaranteed.
-
 ### Prepare folder
 
 Choose a folder for the future build, for example **/Users/user/TBuild**. It will be named ***BuildPath*** in the rest of this document. All commands will be launched from Terminal.
