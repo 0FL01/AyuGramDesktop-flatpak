@@ -35,6 +35,24 @@ namespace {
 constexpr auto kMs = crl::time(1000);
 constexpr auto kRequestTimeLimit = 5 * 60 * crl::time(1000);
 
+// AyuGram: Helper function to check if text matches blocked keywords
+[[nodiscard]] bool MatchesBlockedAdKeywords(
+    const QString &text,
+    const QString &keywords) {
+	if (keywords.isEmpty()) {
+		return false;
+	}
+
+	const auto list = keywords.split(',', Qt::SkipEmptyParts);
+	for (const auto &keyword : list) {
+		const auto trimmed = keyword.trimmed();
+		if (!trimmed.isEmpty() && text.contains(trimmed, Qt::CaseInsensitive)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 const auto kFlaggedPreload = ((MediaPreload*)quintptr(0x01));
 
 [[nodiscard]] bool TooEarlyForRequest(crl::time received) {
@@ -119,7 +137,20 @@ SponsoredMessages::AppendResult SponsoredMessages::append(
 	if (entryIt == end(list.entries)) {
 		list.showedAll = true;
 		return SponsoredMessages::AppendResult::None;
-	} else if (entryIt->preload) {
+	}
+
+	// AyuGram: Filter by blocked keywords
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.blockAdsByKeywords) {
+		const QString &text = entryIt->sponsored.textWithEntities.text;
+		if (MatchesBlockedAdKeywords(text, settings.adsBlockKeywords)) {
+			// Skip this ad and try next one
+			list.entries.erase(entryIt);
+			return append(history);
+		}
+	}
+
+	if (entryIt->preload) {
 		return SponsoredMessages::AppendResult::MediaLoading;
 	}
 	entryIt->item.reset(history->addSponsoredMessage(

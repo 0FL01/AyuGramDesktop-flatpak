@@ -62,6 +62,8 @@ public:
 	bool hideFromBlocked;
 
 	bool disableAds;
+	bool blockAdsByKeywords;
+	QString adsBlockKeywords;
 	bool disableStories;
 	bool disableCustomBackgrounds;
 	bool showOnlyAddedEmojisAndStickers;
@@ -146,6 +148,8 @@ void set_saveForBots(bool val);
 void set_hideFromBlocked(bool val);
 
 void set_disableAds(bool val);
+void set_blockAdsByKeywords(bool val);
+void set_adsBlockKeywords(const QString &val);
 void set_disableStories(bool val);
 void set_disableCustomBackgrounds(bool val);
 void set_showOnlyAddedEmojisAndStickers(bool val);
@@ -223,6 +227,8 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(saveForBots)
 	NLOHMANN_JSON_TO(hideFromBlocked)
 	NLOHMANN_JSON_TO(disableAds)
+	NLOHMANN_JSON_TO(blockAdsByKeywords)
+	NLOHMANN_JSON_TO(adsBlockKeywords)
 	NLOHMANN_JSON_TO(disableStories)
 	NLOHMANN_JSON_TO(disableCustomBackgrounds)
 	NLOHMANN_JSON_TO(showOnlyAddedEmojisAndStickers)
@@ -288,6 +294,8 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(saveForBots)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(hideFromBlocked)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(disableAds)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(blockAdsByKeywords)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(adsBlockKeywords)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(disableStories)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(disableCustomBackgrounds)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showOnlyAddedEmojisAndStickers)

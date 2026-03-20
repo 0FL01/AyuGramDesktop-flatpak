@@ -217,6 +217,8 @@ AyuGramSettings::AyuGramSettings() {
 
 	// ~ QoL toggles
 	disableAds = true;
+	blockAdsByKeywords = false;
+	adsBlockKeywords = "#реклама,#реклама_,#промо,#ad,#sponsored,#партнёрский,erid";
 	disableStories = false;
 	disableCustomBackgrounds = true;
 	showOnlyAddedEmojisAndStickers = false;
@@ -373,6 +375,14 @@ void set_hideFromBlocked(bool val) {
 
 void set_disableAds(bool val) {
 	settings->disableAds = val;
+}
+
+void set_blockAdsByKeywords(bool val) {
+	settings->blockAdsByKeywords = val;
+}
+
+void set_adsBlockKeywords(const QString &val) {
+	settings->adsBlockKeywords = val;
 }
 
 void set_disableStories(bool val) {

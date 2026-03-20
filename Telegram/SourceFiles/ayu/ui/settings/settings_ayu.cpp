@@ -709,6 +709,46 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container) {
 		},
 		container->lifetime());
 
+	// AyuGram: Block ads by keywords
+	AddButtonWithIcon(
+		container,
+		tr::ayu_BlockAdsByKeywords(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->blockAdsByKeywords)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->blockAdsByKeywords);
+		}) | start_with_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_blockAdsByKeywords(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+
+	auto *keywordsButton = AddButtonWithLabel(
+		container,
+		tr::ayu_BlockAdsKeywordsLabel(),
+		rpl::single(settings->adsBlockKeywords),
+		st::settingsButtonNoIcon);
+
+	keywordsButton->addClickHandler([=] {
+		AyuUi::EditMarkBox::Show(
+			controller,
+			tr::ayu_BlockAdsKeywordsTitle(),
+			settings->adsBlockKeywords,
+			"#реклама,#реклама_,#промо,#ad,#sponsored,#партнёрский,erid",
+			[=](QString value) {
+				AyuSettings::set_adsBlockKeywords(value);
+				AyuSettings::save();
+			});
+	});
+
+	AddDividerText(container, tr::ayu_BlockAdsKeywordsHint());
+
 	AddButtonWithIcon(
 		container,
 		tr::ayu_DisableStories(),
