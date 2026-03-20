@@ -7505,6 +7505,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_QoLTogglesHeader" = "Useful features";
 "ayu_KeepAliveService" = "AyuGram Push Service";
 "ayu_DisableAds" = "Disable Ads";
+"ayu_BlockAdsByKeywords" = "Block Ads by Keywords";
+"ayu_BlockAdsKeywordsLabel" = "Blocked Keywords";
+"ayu_BlockAdsKeywordsTitle" = "Edit Blocked Keywords";
+"ayu_BlockAdsKeywordsHint" = "Posts containing these keywords will be hidden. Comma-separated.";
 "ayu_DisableStories" = "Disable Stories";
 "ayu_DisableCustomBackgrounds" = "Disable Custom Backgrounds";
 "ayu_SmoothScroll" = "Smooth Scroll";

@@ -244,6 +244,27 @@ void SetupOther(not_null<Ui::VerticalLayout*> container) {
 
 	AddSubsectionTitle(container, tr::ayu_MessageSavingOtherHeader());
 
+	AddSubsectionTitle(container, tr::ayu_RegexFilters());
+
+	AddButtonWithIcon(
+		container,
+		tr::ayu_FiltersHideFromBlocked(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->hideFromBlocked)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->hideFromBlocked);
+		}) | start_with_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_hideFromBlocked(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+
 	AddButtonWithIcon(
 		container,
 		tr::ayu_LocalPremium(),
