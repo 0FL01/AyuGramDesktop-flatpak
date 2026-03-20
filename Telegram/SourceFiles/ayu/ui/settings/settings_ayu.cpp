@@ -257,7 +257,7 @@ void SetupOther(not_null<Ui::VerticalLayout*> container) {
 		[=](bool enabled)
 		{
 			return (enabled != settings->hideFromBlocked);
-		}) | start_with_next(
+		}) | on_next(
 		[=](bool enabled)
 		{
 			AyuSettings::set_hideFromBlocked(enabled);
