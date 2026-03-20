@@ -80,7 +80,7 @@ void MessageShotBox::setupContent() {
 			AyuFeatures::MessageShot::setChoosingTheme(true);
 
 			auto box = Box<ThemeSelectorBox>(_config.controller);
-			box->paletteSelected() | rpl::start_with_next(
+			box->paletteSelected() | rpl::on_next(
 				[=](const style::palette &palette) mutable
 				{
 					_selectedPalette->reset();
@@ -93,14 +93,14 @@ void MessageShotBox::setupContent() {
 				},
 				content->lifetime());
 
-			box->themeNameChanged() | rpl::start_with_next(
+			box->themeNameChanged() | rpl::on_next(
 				[=](const QString &name)
 				{
 					selectedTheme->force_assign(name);
 				},
 				content->lifetime());
 
-			box->boxClosing() | rpl::start_with_next(
+			box->boxClosing() | rpl::on_next(
 				[=]
 				{
 					AyuFeatures::MessageShot::setChoosingTheme(false);
@@ -115,7 +115,7 @@ void MessageShotBox::setupContent() {
 		st::settingsButtonNoIcon
 	)->toggleOn(rpl::single(_config.showBackground)
 	)->toggledValue(
-	) | start_with_next(
+	) | on_next(
 		[=](bool enabled)
 		{
 			_config.showBackground = enabled;
@@ -130,7 +130,7 @@ void MessageShotBox::setupContent() {
 		st::settingsButtonNoIcon
 	)->toggleOn(rpl::single(_config.showDate)
 	)->toggledValue(
-	) | start_with_next(
+	) | on_next(
 		[=](bool enabled)
 		{
 			_config.showDate = enabled;
@@ -145,7 +145,7 @@ void MessageShotBox::setupContent() {
 		st::settingsButtonNoIcon
 	)->toggleOn(rpl::single(_config.showReactions)
 	)->toggledValue(
-	) | start_with_next(
+	) | on_next(
 		[=](bool enabled)
 		{
 			_config.showReactions = enabled;
@@ -161,7 +161,7 @@ void MessageShotBox::setupContent() {
 	);
 	latestToggle->toggleOn(rpl::single(savedShowColorfulReplies)
 	)->toggledValue(
-	) | start_with_next(
+	) | on_next(
 		[=](bool enabled)
 		{
 			AyuSettings::set_simpleQuotesAndReplies(!enabled);
@@ -201,7 +201,7 @@ void MessageShotBox::setupContent() {
 
 	const auto boxWidth = imageView->getImage().width() / style::DevicePixelRatio() + (st::boxPadding.left() + st::boxPadding.right()) * 4;
 
-	boxClosing() | rpl::start_with_next(
+	boxClosing() | rpl::on_next(
 		[=]
 		{
 			AyuFeatures::MessageShot::resetCustomSelected();

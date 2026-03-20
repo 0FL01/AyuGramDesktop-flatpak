@@ -85,6 +85,7 @@ enum class ChannelDataFlag : uint64 {
 	ForumTabs = (1ULL << 42),
 	HasStarsPerMessage = (1ULL << 43),
 	StarsPerMessageKnown = (1ULL << 44),
+	HasActiveVideoStream = (1ULL << 45),
 
 	AyuNoForwards = (1ULL << 63),
 };
@@ -195,6 +196,10 @@ public:
 	void setUsername(const QString &username);
 	void setUsernames(const Data::Usernames &newUsernames);
 	void setPhoto(const MTPChatPhoto &photo);
+
+	[[nodiscard]] uint64 accessHash() const {
+		return _accessHash;
+	}
 	void setAccessHash(uint64 accessHash);
 
 	void setFlags(ChannelDataFlags which);
@@ -539,6 +544,7 @@ public:
 
 	[[nodiscard]] bool hasActiveStories() const;
 	[[nodiscard]] bool hasUnreadStories() const;
+	[[nodiscard]] bool hasActiveVideoStream() const;
 	void setStoriesState(StoriesState state);
 
 	[[nodiscard]] Data::Forum *forum() const {
@@ -548,19 +554,15 @@ public:
 		return mgInfo ? mgInfo->monoforum() : nullptr;
 	}
 
-	void processTopics(const MTPVector<MTPForumTopic> &topics);
-
 	[[nodiscard]] int levelHint() const;
 	void updateLevelHint(int levelHint);
 
 	[[nodiscard]] TimeId subscriptionUntilDate() const;
 	void updateSubscriptionUntilDate(TimeId subscriptionUntilDate);
 
+	[[nodiscard]] MTPInputChannel inputChannel() const;
+
 	// Still public data members.
-	uint64 access = 0;
-
-	MTPinputChannel inputChannel = MTP_inputChannelEmpty();
-
 	int32 date = 0;
 	std::unique_ptr<MegagroupInfo> mgInfo;
 
@@ -590,6 +592,8 @@ private:
 
 	std::vector<UserId> _recentRequesters;
 	MsgId _availableMinId = 0;
+
+	uint64 _accessHash = 0;
 
 	RestrictionFlags _defaultRestrictions;
 	AdminRightFlags _adminRights;

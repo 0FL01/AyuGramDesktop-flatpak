@@ -101,7 +101,7 @@ ActionWithSubText::ActionWithSubText(
 	setClickedCallback(std::move(callback));
 
 	paintRequest(
-	) | rpl::start_with_next([=]
+	) | rpl::on_next([=]
 							 {
 								 Painter p(this);
 								 paint(p);
@@ -219,19 +219,19 @@ ActionStickerPackAuthor::ActionStickerPackAuthor(not_null<Menu::Menu*> menu,
 
 void ActionStickerPackAuthor::searchAuthor(ID authorId) {
 	const auto session = _session;
-	const auto weak = Ui::MakeWeak(this);
+	const auto weak = base::make_weak(this);
 
-	searchById(
+	searchUserById(
 		authorId,
 		session,
-		[session, weak, authorId](const QString &username, UserData *user)
+		[session, weak, authorId](const QString &username, PeerData *user)
 		{
 			if (!weak) {
 				LOG(("ContextActionStickerAuthor: searchById callback after destruction"));
 				return;
 			}
 
-			const auto strong = weak.data();
+			const auto strong = weak.get();
 			if (!strong) {
 				LOG(("ContextActionStickerAuthor: weak.data() returned null"));
 				return;
@@ -253,7 +253,7 @@ void ActionStickerPackAuthor::searchAuthor(ID authorId) {
 				crl::on_main(
 					[weak]
 					{
-						if (const auto strongInner = weak.data()) {
+						if (const auto strongInner = weak.get()) {
 							strongInner->update();
 						}
 					});
@@ -279,7 +279,7 @@ void ActionStickerPackAuthor::searchAuthor(ID authorId) {
 			crl::on_main(
 				[weak]
 				{
-					if (const auto strongInner = weak.data()) {
+					if (const auto strongInner = weak.get()) {
 						strongInner->update();
 					}
 				});

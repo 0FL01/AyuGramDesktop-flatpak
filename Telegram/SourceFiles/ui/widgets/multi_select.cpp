@@ -409,7 +409,7 @@ void Item::setOver(bool over) {
 
 } // namespace
 
-class MultiSelect::Inner : public TWidget {
+class MultiSelect::Inner : public RpWidget {
 public:
 	using ScrollCallback = Fn<void(int activeTop, int activeBottom)>;
 	Inner(
@@ -652,28 +652,28 @@ MultiSelect::Inner::Inner(
 	rpl::producer<QString> placeholder,
 	const QString &query,
 	ScrollCallback callback)
-: TWidget(parent)
+: RpWidget(parent)
 , _st(st)
 , _scrollCallback(std::move(callback))
 , _field(this, _st.field, std::move(placeholder), query)
 , _cancel(this, _st.fieldCancel) {
 	_field->customUpDown(true);
 	_field->focusedChanges(
-	) | rpl::filter(rpl::mappers::_1) | rpl::start_with_next([=] {
+	) | rpl::filter(rpl::mappers::_1) | rpl::on_next([=] {
 		fieldFocused();
 	}, _field->lifetime());
 	_field->changes(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		queryChanged();
 	}, _field->lifetime());
 	_field->submits(
-	) | rpl::start_with_next([=](Qt::KeyboardModifiers m) {
+	) | rpl::on_next([=](Qt::KeyboardModifiers m) {
 		if (_submittedCallback) {
 			_submittedCallback(m);
 		}
 	}, _field->lifetime());
 	_field->cancelled(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		cancelled();
 	}, _field->lifetime());
 	_cancel->setClickedCallback([=] {
@@ -790,6 +790,9 @@ void MultiSelect::Inner::setActiveItemNext() {
 }
 
 int MultiSelect::Inner::resizeGetHeight(int newWidth) {
+	if (newWidth <= 0) {
+		return height();
+	}
 	computeItemsGeometry(newWidth);
 	updateFieldGeometry();
 

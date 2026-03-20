@@ -106,7 +106,7 @@ void SelectCountriesBox(
 			const auto radioSize = radioView->getSize();
 			radio->resize(radioSize);
 			radio->paintRequest(
-			) | rpl::start_with_next([=](const QRect &r) {
+			) | rpl::on_next([=](const QRect &r) {
 				auto p = QPainter(radio);
 				radioView->paint(p, 0, 0, radioSize.width());
 			}, radio->lifetime());
@@ -177,12 +177,11 @@ void SelectCountriesBox(
 		Ui::AddSkip(container);
 		Ui::AddSkip(container);
 		container->add(
-			object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+			object_ptr<Ui::FlatLabel>(
 				container,
-				object_ptr<Ui::FlatLabel>(
-					container,
-					tr::lng_search_messages_none(),
-					st::membersAbout)));
+				tr::lng_search_messages_none(),
+				st::membersAbout),
+			style::al_top);
 		Ui::AddSkip(container);
 		Ui::AddSkip(container);
 	}

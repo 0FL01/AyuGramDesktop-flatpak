@@ -52,10 +52,11 @@ QRect BubbleWrapInnerRect(const QRect &r) {
 not_null<Ui::RpWidget*> AddBubbleWrap(
 		not_null<Ui::VerticalLayout*> container,
 		const QSize &size) {
-	const auto bubble = container->add(object_ptr<Ui::CenterWrap<RpWidget>>(
-		container,
-		object_ptr<Ui::RpWidget>(container)))->entity();
+	const auto bubble = container->add(
+		object_ptr<Ui::RpWidget>(container),
+		style::al_top);
 	bubble->resize(size);
+	bubble->setNaturalWidth(size.width());
 
 	auto cached = QImage(
 		size * style::DevicePixelRatio(),
@@ -75,7 +76,7 @@ not_null<Ui::RpWidget*> AddBubbleWrap(
 	}
 
 	bubble->paintRequest(
-	) | rpl::start_with_next([bubble, cached = std::move(cached)] {
+	) | rpl::on_next([bubble, cached = std::move(cached)] {
 		auto p = QPainter(bubble);
 		p.drawImage(0, 0, cached);
 	}, bubble->lifetime());

@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "support/support_helper.h"
 #include "styles/style_boxes.h"
 #include "styles/style_chat.h"
+#include "styles/style_credits.h"
 #include "styles/style_dialogs.h" // dialogsMiniReplyStory.
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
@@ -63,7 +64,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-
+#include "ayu/features/filters/filters_controller.h"
 
 namespace {
 
@@ -84,7 +85,7 @@ base::options::toggle FastButtonsModeOption({
 			tr::now,
 			lt_count,
 			fullCount,
-			Ui::Text::WithEntities);
+			tr::marked);
 	} else if (count == 1) {
 		return names.front();
 	}
@@ -96,7 +97,7 @@ base::options::toggle FastButtonsModeOption({
 			full,
 			lt_task,
 			names[i],
-			Ui::Text::WithEntities);
+			tr::marked);
 	}
 	return tr::lng_action_todo_tasks_and_last(
 		tr::now,
@@ -104,7 +105,7 @@ base::options::toggle FastButtonsModeOption({
 		full,
 		lt_task,
 		names.back(),
-		Ui::Text::WithEntities);
+		tr::marked);
 }
 
 } // namespace
@@ -275,7 +276,7 @@ void HistoryMessageForwarded::create(
 				name,
 				lt_user,
 				{ .text = originalPostAuthor },
-				Ui::Text::WithEntities));
+				tr::marked));
 	} else {
 		phrase.append(name);
 	}
@@ -284,9 +285,9 @@ void HistoryMessageForwarded::create(
 			tr::now,
 			lt_user,
 			Ui::Text::Wrapped(phrase, EntityType::CustomUrl, QString()), // Link 1.
-			Ui::Text::WithEntities);
+			tr::marked);
 	} else if (via && psaType.isEmpty()) {
-		const auto linkData = Ui::Text::Link(
+		const auto linkData = tr::link(
 			QString(),
 			1).entities.front().data(); // Link 1.
 		if (fromChannel) {
@@ -295,16 +296,16 @@ void HistoryMessageForwarded::create(
 				lt_channel,
 				Ui::Text::Wrapped(phrase, EntityType::CustomUrl, linkData), // Link 1.
 				lt_inline_bot,
-				Ui::Text::Link('@' + via->bot->username(), 2), // Link 2.
-				Ui::Text::WithEntities);
+				tr::link('@' + via->bot->username(), 2), // Link 2.
+				tr::marked);
 		} else {
 			phrase = tr::lng_forwarded_via(
 				tr::now,
 				lt_user,
 				Ui::Text::Wrapped(phrase, EntityType::CustomUrl, linkData), // Link 1.
 				lt_inline_bot,
-				Ui::Text::Link('@' + via->bot->username(), 2), // Link 2.
-				Ui::Text::WithEntities);
+				tr::link('@' + via->bot->username(), 2), // Link 2.
+				tr::marked);
 		}
 	} else {
 		if (fromChannel || !psaType.isEmpty()) {
@@ -330,14 +331,14 @@ void HistoryMessageForwarded::create(
 							phrase,
 							EntityType::CustomUrl,
 							QString()), // Link 1.
-						Ui::Text::WithEntities);
+						tr::marked);
 			}
 		} else {
 			phrase = tr::lng_forwarded(
 				tr::now,
 				lt_user,
 				Ui::Text::Wrapped(phrase, EntityType::CustomUrl, QString()), // Link 1.
-				Ui::Text::WithEntities);
+				tr::marked);
 		}
 	}
 	text.setMarkedText(st::fwdTextStyle, phrase, kMarkupTextOptions, context);
@@ -536,16 +537,21 @@ void HistoryMessageReply::updateData(
 		&& author->isUser()
 		&& author->asUser()->isBlocked();
 
+
+	const auto filtered = resolvedMessage &&
+			!resolvedMessage.empty() &&
+			FiltersController::filtered(resolvedMessage.get());
+
 	const auto displaying = resolvedMessage
 		|| resolvedStory
 		|| ((nonEmptyQuote || _fields.externalMedia)
 			&& (!_fields.messageId || force));
-	_displaying = displaying && !blocked ? 1 : 0;
+	_displaying = displaying && !blocked && !filtered ? 1 : 0;
 
 	const auto unavailable = !resolvedMessage
 		&& !resolvedStory
 		&& ((!_fields.storyId && !_fields.messageId) || force);
-	_unavailable = unavailable && !blocked ? 1 : 0;
+	_unavailable = unavailable && !blocked && !filtered ? 1 : 0;
 
 	if (force) {
 		if (!_displaying && (_fields.messageId || _fields.storyId)) {
@@ -770,11 +776,6 @@ ReplyKeyboard::ReplyKeyboard(
 		const auto context = _item->fullId();
 		const auto rowCount = int(markup->data.rows.size());
 		_rows.reserve(rowCount);
-		const auto buttonEmoji = Ui::Text::SingleCustomEmoji(
-			owner->customEmojiManager().registerInternalEmoji(
-				st::settingsPremiumIconStar,
-				QMargins(0, -st::moderateBoxExpandInnerSkip, 0, 0),
-				true));
 		for (auto i = 0; i != rowCount; ++i) {
 			const auto &row = markup->data.rows[i];
 			const auto rowSize = int(row.size());
@@ -809,7 +810,8 @@ ReplyKeyboard::ReplyKeyboard(
 					auto firstPart = true;
 					for (const auto &part : text.split(QChar(0x2B50))) {
 						if (!firstPart) {
-							result.append(buttonEmoji);
+							result.append(Ui::Text::IconEmoji(
+								&st::starIconEmojiLarge));
 						}
 						result.append(part);
 						firstPart = false;
@@ -828,11 +830,7 @@ ReplyKeyboard::ReplyKeyboard(
 					button.text.setMarkedText(
 						_st->textStyle(),
 						TextUtilities::SingleLine(textWithEntities),
-						kMarkupTextOptions,
-						Core::TextContext({
-							.session = &item->history()->owner().session(),
-							.repaint = [=] { _st->repaint(item); },
-						}));
+						kMarkupTextOptions);
 				} else {
 					button.text.setText(
 						_st->textStyle(),
@@ -1249,7 +1247,8 @@ bool HistoryMessageReplyMarkup::hiddenBy(Data::Media *media) const {
 
 void HistoryMessageReplyMarkup::updateSuggestControls(
 		SuggestionActions actions) {
-	if (actions == SuggestionActions::AcceptAndDecline) {
+	if (actions == SuggestionActions::AcceptAndDecline
+		|| actions == SuggestionActions::GiftOfferActions) {
 		data.flags |= ReplyMarkupFlag::SuggestionAccept;
 	} else {
 		data.flags &= ~ReplyMarkupFlag::SuggestionAccept;
@@ -1268,7 +1267,21 @@ void HistoryMessageReplyMarkup::updateSuggestControls(
 				type,
 				&HistoryMessageMarkupButton::type);
 	};
-	if (actions == SuggestionActions::AcceptAndDecline) {
+	if (actions == SuggestionActions::GiftOfferActions) {
+		if (has(Type::SuggestAccept)) {
+			// Nothing changed.
+		}
+		data.rows.push_back({
+			{
+				Type::SuggestDecline,
+				tr::lng_action_gift_offer_decline(tr::now),
+			},
+			{
+				Type::SuggestAccept,
+				tr::lng_action_gift_offer_accept(tr::now),
+			},
+		});
+	} else if (actions == SuggestionActions::AcceptAndDecline) {
 		//     ... rows ...
 		// [decline] | [accept]
 		//   [suggestchanges]
@@ -1366,11 +1379,7 @@ MessageFactcheck FromMTP(
 	}
 	const auto &data = factcheck->data();
 	if (const auto text = data.vtext()) {
-		const auto &data = text->data();
-		result.text = {
-			qs(data.vtext()),
-			Api::EntitiesFromMTP(session, data.ventities().v),
-		};
+		result.text = Api::ParseTextWithEntities(session, *text);
 	}
 	if (const auto country = data.vcountry()) {
 		result.country = qs(country->v);

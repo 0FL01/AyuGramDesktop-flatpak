@@ -7,15 +7,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_top_bar_suggestion.h"
 
+#include "api/api_authorizations.h"
 #include "api/api_credits.h"
 #include "api/api_peer_photo.h"
 #include "api/api_premium.h"
 #include "apiwrap.h"
 #include "base/call_delayed.h"
 #include "boxes/star_gift_box.h" // ShowStarGiftBox.
+#include "boxes/star_gift_auction_box.h"
 #include "core/application.h"
 #include "core/click_handler_types.h"
 #include "core/ui_integration.h"
+#include "data/components/gift_auctions.h"
+#include "data/components/promo_suggestions.h"
 #include "data/data_birthday.h"
 #include "data/data_changes.h"
 #include "data/data_peer_values.h" // Data::AmPremiumValue.
@@ -25,16 +29,21 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_group_call_bar.h"
 #include "info/profile/info_profile_values.h"
 #include "lang/lang_keys.h"
-#include "data/components/promo_suggestions.h"
 #include "main/main_session.h"
+#include "settings/settings_active_sessions.h"
 #include "settings/settings_credits_graphics.h"
 #include "settings/settings_premium.h"
+#include "ui/boxes/confirm_box.h"
 #include "ui/controls/userpic_button.h"
 #include "ui/effects/credits_graphics.h"
 #include "ui/layers/generic_box.h"
+#include "ui/rect.h"
 #include "ui/text/format_values.h"
 #include "ui/text/text_utilities.h"
+#include "ui/toast/toast.h"
 #include "ui/ui_utility.h"
+#include "ui/vertical_list.h"
+#include "ui/wrap/fade_wrap.h"
 #include "ui/wrap/slide_wrap.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
@@ -42,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_chat_helpers.h"
 #include "styles/style_dialogs.h"
+#include "styles/style_layers.h"
 
 namespace Dialogs {
 namespace {
@@ -53,6 +63,78 @@ namespace {
 	return window->sessionController();
 }
 
+[[nodiscard]] QString FormatAuthInfo(const Data::UnreviewedAuth &auth) {
+	const auto location = auth.location.isEmpty()
+		? QString()
+		: "\U0001F30D " + auth.location;
+	const auto device = auth.device.isEmpty()
+		? QString()
+		: "\U0001F4F1 " + auth.device;
+
+	if (!location.isEmpty() && !device.isEmpty()) {
+		return location + " (" + device + ")";
+	} else if (!location.isEmpty()) {
+		return location;
+	} else if (!device.isEmpty()) {
+		return device;
+	}
+	return QString();
+}
+
+void ShowAuthToast(
+		not_null<Ui::RpWidget*> parent,
+		not_null<Main::Session*> session,
+		const std::vector<Data::UnreviewedAuth> &list,
+		bool confirmed) {
+	if (confirmed) {
+		auto text = tr::lng_unconfirmed_auth_confirmed_message(
+			tr::now,
+			lt_link,
+			tr::link(tr::lng_settings_sessions_title(tr::now)),
+			tr::rich);
+		auto filter = [=](
+				ClickHandlerPtr handler,
+				Qt::MouseButton button) {
+			if (const auto controller = FindSessionController(parent)) {
+				session->api().authorizations().reload();
+				controller->showSettings(Settings::Sessions::Id());
+				return false;
+			}
+			return true;
+		};
+		Ui::Toast::Show(parent->window(), Ui::Toast::Config{
+			.title = tr::lng_unconfirmed_auth_confirmed(tr::now),
+			.text = std::move(text),
+			.filter = std::move(filter),
+			.duration = crl::time(5000),
+		});
+	} else {
+		auto messageText = QString();
+		if (list.size() == 1) {
+			messageText = tr::lng_unconfirmed_auth_denied_single(
+				tr::now,
+				lt_country,
+				FormatAuthInfo(list.front()));
+		} else {
+			auto authList = QString('\n');
+			for (auto i = 0; i < std::min(int(list.size()), 10); ++i) {
+				const auto info = FormatAuthInfo(list[i]);
+				if (!info.isEmpty()) {
+					authList += "• " + info + "\n";
+				}
+			}
+			messageText = tr::lng_unconfirmed_auth_denied_multiple(
+				tr::now,
+				lt_country,
+				authList);
+		}
+		if (const auto controller = FindSessionController(parent)) {
+			const auto count = float64(list.size());
+			controller->show(Box(ShowAuthDeniedBox, count, messageText));
+		}
+	}
+}
+
 constexpr auto kSugSetBirthday = "BIRTHDAY_SETUP"_cs;
 constexpr auto kSugBirthdayContacts = "BIRTHDAY_CONTACTS_TODAY"_cs;
 constexpr auto kSugPremiumAnnual = "PREMIUM_ANNUAL"_cs;
@@ -61,6 +143,7 @@ constexpr auto kSugPremiumRestore = "PREMIUM_RESTORE"_cs;
 constexpr auto kSugPremiumGrace = "PREMIUM_GRACE"_cs;
 constexpr auto kSugSetUserpic = "USERPIC_SETUP"_cs;
 constexpr auto kSugLowCreditsSubs = "STARS_SUBSCRIPTION_LOW_BALANCE"_cs;
+
 
 } // namespace
 
@@ -79,7 +162,9 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 
 		struct State {
 			TopBarSuggestionContent *content = nullptr;
-			Ui::SlideWrap<Ui::RpWidget> *wrap = nullptr;
+			Ui::SlideWrap<Ui::VerticalLayout> *unconfirmedWarning = nullptr;
+			base::unique_qptr<Ui::SlideWrap<Ui::RpWidget>> wrap;
+			rpl::variable<int> leftPadding;
 			rpl::variable<Toggle> desiredWrapToggle;
 			rpl::variable<bool> outerWrapToggle;
 			rpl::lifetime birthdayLifetime;
@@ -87,29 +172,47 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 			rpl::lifetime userpicLifetime;
 			rpl::lifetime giftsLifetime;
 			rpl::lifetime creditsLifetime;
+			rpl::lifetime auctionsLifetime;
 			std::unique_ptr<Api::CreditsHistory> creditsHistory;
 		};
 
 		const auto state = lifetime.make_state<State>();
 		state->outerWrapToggle = rpl::duplicate(outerWrapToggleValue);
-		const auto ensureWrap = [=] {
+		state->leftPadding = rpl::variable<int>(
+			rpl::single(st::dialogsTopBarLeftPadding));
+		const auto ensureContent = [=] {
 			if (!state->content) {
+				const auto window = FindSessionController(parent);
 				state->content = Ui::CreateChild<TopBarSuggestionContent>(
-					parent);
+					parent,
+					[=] { return window->isGifPausedAtLeastFor(
+						Window::GifPauseReason::Layer); });
 				rpl::combine(
 					parent->widthValue(),
 					state->content->desiredHeightValue()
-				) | rpl::start_with_next([=](int width, int height) {
+				) | rpl::on_next([=](int width, int height) {
 					state->content->resize(width, height);
 				}, state->content->lifetime());
 			}
+		};
+		const auto ensureWrap = [=](not_null<Ui::RpWidget*> child) {
 			if (!state->wrap) {
-				state->wrap = Ui::CreateChild<Ui::SlideWrap<Ui::RpWidget>>(
-					parent,
-					object_ptr<Ui::RpWidget>::fromRaw(state->content));
+				state->wrap
+					= base::make_unique_q<Ui::SlideWrap<Ui::RpWidget>>(
+						parent,
+						object_ptr<Ui::RpWidget>::fromRaw(child));
 				state->desiredWrapToggle.force_assign(
 					Toggle{ false, anim::type::instant });
 			}
+		};
+
+		const auto setLeftPaddingRelativeTo = [=](
+				not_null<TopBarSuggestionContent*> content,
+				not_null<Ui::RpWidget*> relativeTo) {
+			content->setLeftPadding(state->leftPadding.value(
+				) | rpl::map([w = relativeTo->width()](int padding) {
+					return w + padding * 2;
+				}));
 		};
 
 		const auto processCurrentSuggestion = [=](auto repeat) -> void {
@@ -118,15 +221,97 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 			state->userpicLifetime.destroy();
 			state->giftsLifetime.destroy();
 			state->creditsLifetime.destroy();
+			state->auctionsLifetime.destroy();
 
-			ensureWrap();
+			if (!session->api().authorizations().unreviewed().empty()) {
+				state->content = nullptr;
+				state->wrap = nullptr;
+				const auto &list
+					= session->api().authorizations().unreviewed();
+				const auto hashes = ranges::views::all(
+					list
+				) | ranges::views::transform([](const auto &auth) {
+					return auth.hash;
+				}) | ranges::to_vector;
+
+				const auto content = CreateUnconfirmedAuthContent(
+					parent,
+					list,
+					[=](bool confirmed) {
+						ShowAuthToast(parent, session, list, confirmed);
+						session->api().authorizations().review(
+							hashes,
+							confirmed);
+					});
+				ensureWrap(content);
+				const auto wasUnconfirmedWarning = state->unconfirmedWarning;
+				state->unconfirmedWarning = content;
+				state->desiredWrapToggle.force_assign(Toggle{
+					true,
+					(state->unconfirmedWarning != wasUnconfirmedWarning)
+						? anim::type::instant
+						: anim::type::normal,
+				});
+				return;
+			} else {
+				if (state->unconfirmedWarning) {
+					state->unconfirmedWarning = nullptr;
+					state->wrap = nullptr;
+				}
+			}
+
+			ensureContent();
+			ensureWrap(state->content);
 			const auto content = state->content;
-			const auto wrap = state->wrap;
+			const auto wrap = state->wrap.get();
 			using RightIcon = TopBarSuggestionContent::RightIcon;
 			const auto promo = &session->promoSuggestions();
-			if (const auto custom = promo->custom()) {
+			const auto auctions = &session->giftAuctions();
+			if (auctions->hasActive()) {
+				using namespace Data;
+				struct Button {
+					rpl::variable<TextWithEntities> text;
+					Fn<void()> callback;
+					base::has_weak_ptr guard;
+				};
+				auto &lifetime = state->auctionsLifetime;
+				const auto button = lifetime.template make_state<Button>();
+				const auto window = FindSessionController(parent);
+				auctions->active(
+				) | rpl::on_next([=](ActiveAuctions &&active) {
+					const auto empty = active.list.empty();
+					state->desiredWrapToggle.force_assign(
+						Toggle{ !empty, anim::type::normal });
+					if (empty) {
+						return;
+					}
+
+					auto text = Ui::ActiveAuctionsState(active);
+					const auto textColorOverride = text.someOutbid
+						? st::attentionButtonFg->c
+						: std::optional<QColor>();
+					content->setContent(
+						Ui::ActiveAuctionsTitle(active),
+						std::move(text.text),
+						Core::TextContext({ .session = session }),
+						textColorOverride);
+					button->text = Ui::ActiveAuctionsButton(active);
+					button->callback = Ui::ActiveAuctionsCallback(
+						window,
+						active);
+				}, state->auctionsLifetime);
+				const auto callback = crl::guard(&button->guard, [=] {
+					button->callback();
+				});
+				content->setRightButton(button->text.value(), callback);
+				content->setClickedCallback(callback);
+				content->setLeftPadding(state->leftPadding.value());
+				state->desiredWrapToggle.force_assign(
+					Toggle{ true, anim::type::normal });
+				return;
+			} else if (const auto custom = promo->custom()) {
 				content->setRightIcon(RightIcon::Close);
-				content->setLeftPadding(0);
+				content->setLeftPadding(state->leftPadding.value());
 				content->setClickedCallback([=] {
 					const auto controller = FindSessionController(parent);
 					UrlClickHandler::Open(
@@ -150,7 +335,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 			} else if (session->premiumCanBuy()
 				&& promo->current(kSugPremiumGrace.utf8())) {
 				content->setRightIcon(RightIcon::Close);
-				content->setLeftPadding(0);
+				content->setLeftPadding(state->leftPadding.value());
 				content->setClickedCallback([=] {
 					const auto controller = FindSessionController(parent);
 					UrlClickHandler::Open(
@@ -166,7 +351,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				content->setContent(
 					tr::lng_dialogs_suggestions_premium_grace_title(
 						tr::now,
-						Ui::Text::Bold),
+						tr::bold),
 					tr::lng_dialogs_suggestions_premium_grace_about(
 						tr::now,
 						TextWithEntities::Simple));
@@ -187,7 +372,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 						return;
 					}
 					content->setRightIcon(RightIcon::Close);
-					content->setLeftPadding(0);
+					content->setLeftPadding(state->leftPadding.value());
 					content->setClickedCallback([=] {
 						const auto controller = FindSessionController(parent);
 						controller->uiShow()->show(Box(
@@ -214,7 +399,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 							Ui::MakeCreditsIconEntity(),
 							lt_channels,
 							{ peers },
-							Ui::Text::Bold),
+							tr::bold),
 						tr::lng_dialogs_suggestions_credits_sub_low_about(
 							tr::now,
 							TextWithEntities::Simple),
@@ -226,7 +411,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				};
 				session->credits().load();
 				state->creditsLifetime.destroy();
-				session->credits().balanceValue() | rpl::start_with_next([=] {
+				session->credits().balanceValue() | rpl::on_next([=] {
 					state->creditsLifetime.destroy();
 					state->creditsHistory->requestSubscriptions(
 						Data::CreditsStatusSlice::OffsetToken(),
@@ -284,12 +469,12 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 							tr::now,
 							lt_text,
 							{ first->shortName() },
-							Ui::Text::RichLangValue)
+							tr::rich)
 						: tr::lng_dialogs_suggestions_birthday_contacts_title(
 							tr::now,
 							lt_count,
 							users.size(),
-							Ui::Text::RichLangValue);
+							tr::rich);
 					auto text = isSingle
 						? tr::lng_dialogs_suggestions_birthday_contact_about(
 							tr::now,
@@ -298,8 +483,6 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 							tr::now,
 							TextWithEntities::Simple);
 					content->setContent(std::move(title), std::move(text));
-					const auto leftPadding
-						= st::defaultDialogRow.padding.left();
 					state->giftsLifetime.destroy();
 					if (!isSingle) {
 						struct UserViews {
@@ -316,7 +499,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 						widget->setAttribute(
 							Qt::WA_TransparentForMouseEvents);
 						content->sizeValue() | rpl::filter_size(
-						) | rpl::start_with_next([=](const QSize &size) {
+						) | rpl::on_next([=](const QSize &size) {
 							widget->resize(size);
 							widget->show();
 							widget->raise();
@@ -326,7 +509,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 								s->inRow.push_back({ .peer = user });
 							}
 						}
-						widget->paintRequest() | rpl::start_with_next([=] {
+						widget->paintRequest() | rpl::on_next([=] {
 							auto p = QPainter(widget);
 							const auto regenerate = [&] {
 								if (s->userpics.isNull()) {
@@ -348,11 +531,16 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 									s->inRow,
 									st,
 									3);
-								content->setLeftPadding(leftPadding
-									+ (users.size() * st.size - st.shift));
+								const auto v = int(users.size() * st.size
+									- st.shift);
+								content->setLeftPadding(
+									state->leftPadding.value(
+									) | rpl::map([v](int padding) {
+										return padding * 2 + v;
+									}));
 							}
 							p.drawImage(
-								leftPadding,
+								state->leftPadding.current(),
 								(widget->height()
 									- (s->userpics.height()
 										/ style::DevicePixelRatio())) / 2,
@@ -368,15 +556,17 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 									st::uploadUserpicButton));
 						const auto fake = ptr->get();
 						fake->setAttribute(Qt::WA_TransparentForMouseEvents);
-						content->sizeValue() | rpl::filter_size(
-						) | rpl::start_with_next([=](const QSize &s) {
+						rpl::combine(
+							state->leftPadding.value(),
+							content->sizeValue() | rpl::filter_size()
+						) | rpl::on_next([=](int p, const QSize &s) {
 							fake->raise();
 							fake->show();
 							fake->moveToLeft(
-								leftPadding,
+								p,
 								(s.height() - fake->height()) / 2);
 						}, fake->lifetime());
-						content->setLeftPadding(fake->width() + leftPadding);
+						setLeftPaddingRelativeTo(content, fake);
 					}
 
 					state->desiredWrapToggle.force_assign(
@@ -386,7 +576,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 			} else if (promo->current(kSugSetBirthday.utf8())
 				&& !Data::IsBirthdayToday(session->user()->birthday())) {
 				content->setRightIcon(RightIcon::Close);
-				content->setLeftPadding(0);
+				content->setLeftPadding(state->leftPadding.value());
 				content->setClickedCallback([=] {
 					const auto controller = FindSessionController(parent);
 					Core::App().openInternalUrl(
@@ -401,7 +591,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 						Data::IsBirthdayTodayValue
 					) | rpl::flatten_latest(
 					) | rpl::distinct_until_changed(
-					) | rpl::start_with_next([=] {
+					) | rpl::on_next([=] {
 						repeat(repeat);
 					});
 				});
@@ -412,7 +602,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				content->setContent(
 					tr::lng_dialogs_suggestions_birthday_title(
 						tr::now,
-						Ui::Text::Bold),
+						tr::bold),
 					tr::lng_dialogs_suggestions_birthday_about(
 						tr::now,
 						TextWithEntities::Simple));
@@ -444,7 +634,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 							tr::now,
 							lt_text,
 							{ discount.replace(kMinus, QChar()) },
-							Ui::Text::Bold),
+							tr::bold),
 						description(tr::now, TextWithEntities::Simple));
 					content->setClickedCallback([=] {
 						const auto controller = FindSessionController(parent);
@@ -461,9 +651,9 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				};
 				if (isPremiumAnnual || isPremiumRestore || isPremiumUpgrade) {
 					content->setRightIcon(RightIcon::Arrow);
-					content->setLeftPadding(0);
+					content->setLeftPadding(state->leftPadding.value());
 					const auto api = &session->api().premium();
-					api->statusTextValue() | rpl::start_with_next([=] {
+					api->statusTextValue() | rpl::on_next([=] {
 						for (const auto &o : api->subscriptionOptions()) {
 							if (o.months == 12) {
 								set(o.discount);
@@ -485,17 +675,18 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 					&controller->window(),
 					Ui::UserpicButton::Role::ChoosePhoto,
 					st::uploadUserpicButton);
-				const auto leftPadding = st::defaultDialogRow.padding.left();
-				content->sizeValue() | rpl::filter_size(
-				) | rpl::start_with_next([=](const QSize &s) {
+				rpl::combine(
+					state->leftPadding.value(),
+					content->sizeValue() | rpl::filter_size()
+				) | rpl::on_next([=](int padding, const QSize &s) {
 					upload->raise();
 					upload->show();
 					upload->moveToLeft(
-						leftPadding,
+						padding,
 						(s.height() - upload->height()) / 2);
 				}, content->lifetime());
-				content->setLeftPadding(upload->width() + leftPadding);
-				upload->chosenImages() | rpl::start_with_next([=](
+				setLeftPaddingRelativeTo(content, upload);
+				upload->chosenImages() | rpl::on_next([=](
 						Ui::UserpicButton::ChosenImage &&chosen) {
 					if (chosen.type == Ui::UserpicButton::ChosenType::Set) {
 						session->api().peerPhoto().upload(
@@ -511,7 +702,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				state->userpicLifetime = session->changes().peerUpdates(
 					session->user(),
 					Data::PeerUpdate::Flag::Photo
-				) | rpl::start_with_next([=] {
+				) | rpl::on_next([=] {
 					if (session->user()->userpicPhotoId()) {
 						repeat(repeat);
 					}
@@ -537,7 +728,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 				content->setContent(
 					tr::lng_dialogs_suggestions_userpics_title(
 						tr::now,
-						Ui::Text::Bold),
+						tr::bold),
 					tr::lng_dialogs_suggestions_userpics_about(
 						tr::now,
 						TextWithEntities::Simple));
@@ -557,7 +748,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 		state->desiredWrapToggle.value() | rpl::combine_previous(
 		) | rpl::filter([=] {
 			return state->wrap != nullptr;
-		}) | rpl::start_with_next([=](Toggle was, Toggle now) {
+		}) | rpl::on_next([=](Toggle was, Toggle now) {
 			state->wrap->toggle(
 				state->outerWrapToggle.current() && now.value,
 				(was.value == now.value)
@@ -568,7 +759,7 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 		state->outerWrapToggle.value() | rpl::combine_previous(
 		) | rpl::filter([=] {
 			return state->wrap != nullptr;
-		}) | rpl::start_with_next([=](bool was, bool now) {
+		}) | rpl::on_next([=](bool was, bool now) {
 			const auto toggle = state->desiredWrapToggle.current();
 			state->wrap->toggle(
 				toggle.value && now,
@@ -577,12 +768,15 @@ rpl::producer<Ui::SlideWrap<Ui::RpWidget>*> TopBarSuggestionValue(
 
 		rpl::merge(
 			session->promoSuggestions().value(),
-			Data::AmPremiumValue(session) | rpl::skip(1) | rpl::to_empty
-		) | rpl::start_with_next([=] {
-			const auto was = state->wrap;
+			session->api().authorizations().unreviewedChanges(),
+			Data::AmPremiumValue(session) | rpl::skip(1) | rpl::to_empty,
+			session->giftAuctions().hasActiveChanges() | rpl::to_empty
+		) | rpl::on_next([=] {
+			const auto was = state->wrap.get();
+			const auto weak = base::make_weak(was);
 			processCurrentSuggestion(processCurrentSuggestion);
-			if (was != state->wrap) {
-				consumer.put_next_copy(state->wrap);
+			if (was != state->wrap || (was && !weak)) {
+				consumer.put_next_copy(state->wrap.get());
 			}
 		}, lifetime);
 

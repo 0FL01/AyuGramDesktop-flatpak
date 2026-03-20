@@ -7,18 +7,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_shared_media.h"
 
-#include <rpl/combine.h>
-#include "main/main_session.h"
 #include "apiwrap.h"
-#include "storage/storage_facade.h"
-#include "history/history.h"
-#include "history/history_item.h"
+#include "core/crash_reports.h"
 #include "data/components/scheduled_messages.h"
 #include "data/data_document.h"
 #include "data/data_media_types.h"
 #include "data/data_photo.h"
+#include "data/data_saved_music.h"
 #include "data/data_session.h"
-#include "core/crash_reports.h"
+#include "history/history.h"
+#include "history/history_item.h"
+#include "main/main_session.h"
+#include "storage/storage_facade.h"
 
 namespace {
 
@@ -122,7 +122,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 				data.direction);
 		};
 		builder->insufficientAround(
-		) | rpl::start_with_next(requestMediaAround, lifetime);
+		) | rpl::on_next(requestMediaAround, lifetime);
 
 		auto pushNextSnapshot = [=] {
 			consumer.put_next(builder->snapshot());
@@ -137,7 +137,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 				&& (update.type == key.type);
 		}) | rpl::filter([=](const SliceUpdate &update) {
 			return builder->applyUpdate(update.data);
-		}) | rpl::start_with_next(pushNextSnapshot, lifetime);
+		}) | rpl::on_next(pushNextSnapshot, lifetime);
 
 		using OneRemoved = Storage::SharedMediaRemoveOne;
 		session->storage().sharedMediaOneRemoved(
@@ -146,7 +146,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 				&& update.types.test(key.type);
 		}) | rpl::filter([=](const OneRemoved &update) {
 			return builder->removeOne(update.messageId);
-		}) | rpl::start_with_next(pushNextSnapshot, lifetime);
+		}) | rpl::on_next(pushNextSnapshot, lifetime);
 
 		using AllRemoved = Storage::SharedMediaRemoveAll;
 		session->storage().sharedMediaAllRemoved(
@@ -159,7 +159,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 				&& update.types.test(key.type);
 		}) | rpl::filter([=] {
 			return builder->removeAll();
-		}) | rpl::start_with_next(pushNextSnapshot, lifetime);
+		}) | rpl::on_next(pushNextSnapshot, lifetime);
 
 		using InvalidateBottom = Storage::SharedMediaInvalidateBottom;
 		session->storage().sharedMediaBottomInvalidated(
@@ -167,7 +167,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 			return (update.peerId == key.peerId);
 		}) | rpl::filter([=] {
 			return builder->invalidateBottom();
-		}) | rpl::start_with_next(pushNextSnapshot, lifetime);
+		}) | rpl::on_next(pushNextSnapshot, lifetime);
 
 		using Result = Storage::SharedMediaResult;
 		session->storage().query(Storage::SharedMediaQuery(
@@ -176,7 +176,7 @@ rpl::producer<SparseIdsSlice> SharedMediaViewer(
 			limitAfter
 		)) | rpl::filter([=](const Result &result) {
 			return builder->applyInitial(result);
-		}) | rpl::start_with_next_done(
+		}) | rpl::on_next_done(
 			pushNextSnapshot,
 			[=] { builder->checkInsufficient(); },
 			lifetime);
@@ -230,6 +230,39 @@ rpl::producer<SparseIdsMergedSlice> SharedScheduledMediaViewer(
 		return SparseIdsMergedSlice(
 			key.mergedKey,
 			std::move(unsorted));
+	});
+}
+
+rpl::producer<SparseIdsMergedSlice> SavedMusicMediaViewer(
+		not_null<Main::Session*> session,
+		SharedMediaMergedKey key,
+		int limitBefore,
+		int limitAfter) {
+	Expects((key.mergedKey.universalId != 0)
+		|| (limitBefore == 0 && limitAfter == 0));
+
+	const auto peerId = key.mergedKey.peerId;
+	const auto item = key.mergedKey.universalId
+		? session->data().message(peerId, key.mergedKey.universalId)
+		: nullptr;
+
+	return Data::SavedMusicList(
+		session->data().peer(peerId),
+		item,
+		std::max(limitBefore, limitAfter)
+	) | rpl::map([=](const Data::SavedMusicSlice &slice) {
+		auto list = std::vector<MsgId>();
+		list.reserve(slice.size());
+		for (auto i = 0, count = int(slice.size()); i != count; ++i) {
+			list.push_back(slice[i]->id);
+		}
+		return SparseIdsMergedSlice(
+			key.mergedKey,
+			SparseUnsortedIdsSlice(
+				std::move(list),
+				slice.fullCount(),
+				slice.skippedBefore(),
+				slice.skippedAfter()));
 	});
 }
 
@@ -468,7 +501,7 @@ rpl::producer<SharedMediaWithLastSlice> SharedMediaWithLastViewer(
 				std::move(viewerKey),
 				limitBefore,
 				limitAfter
-			) | rpl::start_with_next([=](SparseIdsMergedSlice &&update) {
+			) | rpl::on_next([=](SparseIdsMergedSlice &&update) {
 				consumer.put_next(SharedMediaWithLastSlice(
 					session,
 					key,
@@ -483,7 +516,20 @@ rpl::producer<SharedMediaWithLastSlice> SharedMediaWithLastViewer(
 				std::move(viewerKey),
 				limitBefore,
 				limitAfter
-			) | rpl::start_with_next([=](SparseIdsMergedSlice &&update) {
+			) | rpl::on_next([=](SparseIdsMergedSlice &&update) {
+				consumer.put_next(SharedMediaWithLastSlice(
+					session,
+					key,
+					std::move(update),
+					std::nullopt));
+			});
+		} else if (key.topicRootId == SharedMediaWithLastSlice::kSavedMusicTopicId) {
+			return SavedMusicMediaViewer(
+				session,
+				std::move(viewerKey),
+				limitBefore,
+				limitAfter
+			) | rpl::on_next([=](SparseIdsMergedSlice &&update) {
 				consumer.put_next(SharedMediaWithLastSlice(
 					session,
 					key,
@@ -504,7 +550,7 @@ rpl::producer<SharedMediaWithLastSlice> SharedMediaWithLastViewer(
 					key.type),
 				1,
 				1)
-		) | rpl::start_with_next([=](
+		) | rpl::on_next([=](
 				SparseIdsMergedSlice &&viewer,
 				SparseIdsMergedSlice &&ending) {
 			consumer.put_next(SharedMediaWithLastSlice(

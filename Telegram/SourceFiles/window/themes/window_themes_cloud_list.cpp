@@ -36,7 +36,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 // AyuGram includes
-#include "ayu/features/messageshot/message_shot.h"
+#include "ayu/features/message_shot/message_shot.h"
 
 
 namespace Window {
@@ -347,7 +347,7 @@ void CloudList::setup() {
 	});
 
 	if (AyuFeatures::MessageShot::isChoosingTheme()) {
-		AyuFeatures::MessageShot::resetCustomSelectedEvents() | rpl::start_with_next([=] {
+		AyuFeatures::MessageShot::resetCustomSelectedEvents() | rpl::on_next([=] {
 			_group->setValue(-1);
 		}, _outer->lifetime());
 	}
@@ -371,12 +371,12 @@ void CloudList::setup() {
 		allShown()
 	) | rpl::map([=] {
 		return collectAll();
-	}) | rpl::start_with_next([=](std::vector<Data::CloudTheme> &&list) {
+	}) | rpl::on_next([=](std::vector<Data::CloudTheme> &&list) {
 		rebuildUsing(std::move(list));
 	}, _outer->lifetime());
 
 	_outer->widthValue(
-	) | rpl::start_with_next([=](int width) {
+	) | rpl::on_next([=](int width) {
 		updateGeometry();
 	}, _outer->lifetime());
 }
@@ -702,7 +702,7 @@ void CloudList::subscribeToDownloadFinished() {
 		return;
 	}
 	_window->session().downloaderTaskFinished(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		auto &&waiting = _elements | ranges::views::filter(&Element::waiting);
 		const auto still = ranges::count_if(waiting, [&](Element &element) {
 			if (!element.media) {

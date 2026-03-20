@@ -54,7 +54,7 @@ notifyWidth: 320px;
 notifyMinHeight: 80px;
 notifyDeltaX: 6px;
 notifyDeltaY: 7px;
-notifyActionsDuration: 180;
+notifyActionsDuration: 200;
 
 notifyHideAllHeight: 36px;
 
@@ -188,7 +188,7 @@ connectingRetryLink: LinkButton(defaultLinkButton) {
 }
 connectingProxyOff: icon {{ "proxy_off", menuIconFg }};
 connectingProxyOn: icon {{ "proxy_on", windowBgActive }};
-connectingDuration: 135;
+connectingDuration: 150;
 
 windowOutdatedDetails: FlatLabel(defaultFlatLabel) {
 	align: align(top);
@@ -283,8 +283,10 @@ windowFilterSmallRemove: IconButton(notifyClose) {
 }
 windowFilterSmallRemoveRight: 10px;
 windowFilterNameInput: InputField(defaultInputField) {
-	textMargins: margins(0px, 26px, 36px, 4px);
+	textMargins: margins(0px, 26px, 87px, 4px);
 }
+windowFilterNameEmojiPosition: point(-65px, 22px);
+windowFilterNameCharsLimitRightPosition: point(75px, 27px);
 windowFilterStaticTitlePosition: point(0px, 5px);
 windowFilterIconToggleSize: size(36px, 36px);
 windowFilterIconTogglePosition: point(-4px, 18px);
@@ -330,6 +332,49 @@ ivWidthDefault: 600px;
 ivHeightDefault: 800px;
 
 maxWidthSharedMediaWindow: 419px;
+
+chatSwitchMargins: margins(16px, 16px, 16px, 16px);
+chatSwitchPadding: margins(12px, 12px, 12px, 12px);
+chatSwitchSize: size(72px, 104px);
+chatSwitchUserpic: UserpicButton(defaultUserpicButton) {
+	size: size(56px, 56px);
+	photoSize: 56px;
+}
+chatSwitchUserpicSublist: UserpicButton(defaultUserpicButton) {
+	size: size(40px, 40px);
+	photoSize: 40px;
+}
+chatSwitchUserpicSmall: UserpicButton(defaultUserpicButton) {
+	size: size(24px, 24px);
+	photoSize: 24px;
+}
+chatSwitchUserpicTop: 8px;
+chatSwitchNameLabel: FlatLabel(defaultFlatLabel) {
+	style: TextStyle(defaultTextStyle) {
+		font: font(11px);
+	}
+	align: align(top);
+	minWidth: 56px;
+	maxHeight: 36px;
+}
+chatSwitchNameSkip: 6px;
+chatSwitchSelectLine: 3px;
+
+lockSetupEmailLabelMaxWidth: 256px + 24px + 24px;
+lockSetupEmailTitle: FlatLabel(defaultFlatLabel) {
+	minWidth: lockSetupEmailLabelMaxWidth;
+	style: TextStyle(defaultTextStyle) {
+		font: font(19px);
+	}
+}
+lockSetupEmailLabel: FlatLabel(defaultFlatLabel) {
+	minWidth: 256px;
+}
+lockSetupEmailLogOutPosition: point(10px, 10px);
+lockSetupEmailUserpicSmall: UserpicButton(defaultUserpicButton) {
+	size: size(22px, 22px);
+	photoSize: 22px;
+}
 
 // Windows specific
 

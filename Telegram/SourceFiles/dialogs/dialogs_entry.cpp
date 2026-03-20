@@ -230,7 +230,7 @@ uint64 Entry::computeSortPosition(FilterId filterId) const {
 
 void Entry::updateChatListExistence() {
 	if (const auto history = asHistory()) {
-		if (const auto channel = history->peer->asMonoforum()) {
+		if (history->peer->asMonoforum()) {
 			if (!folderKnown()) {
 				history->clearFolder();
 			}
@@ -458,7 +458,7 @@ void Entry::updateChatListEntryHeight() {
 	session().changes().entryUpdated(this, Data::EntryUpdate::Flag::Height);
 }
 
-[[nodiscard]] bool Entry::hasChatsFilterTags(FilterId exclude) const {
+bool Entry::hasChatsFilterTags(FilterId exclude) const {
 	if (!owner().chatsFilters().tagsEnabled()) {
 		return false;
 	}

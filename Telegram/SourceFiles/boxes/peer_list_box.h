@@ -85,6 +85,12 @@ public:
 
 		return _peer;
 	}
+	// AyuGram
+	void setPeer(not_null<PeerData*> peer) {
+		_peer = peer;
+	}
+	// AyuGram
+
 	[[nodiscard]] PeerListRowId id() const {
 		return _id;
 	}
@@ -223,7 +229,8 @@ public:
 		setCheckedInternal(checked, animated);
 	}
 	void setCustomizedCheckSegments(
-		std::vector<Ui::OutlineSegment> segments);
+		std::vector<Ui::OutlineSegment> segments,
+		bool liveBadge);
 	void setHidden(bool hidden) {
 		_hidden = hidden;
 	}

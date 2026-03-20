@@ -82,7 +82,7 @@ mediaPlayerButton: MediaPlayerButton {
 		color: lightButtonBgOver;
 	}
 
-	duration: 180;
+	duration: 200;
 }
 mediaPlayerWideWidth: 460px;
 mediaPlayerHeight: 35px;
@@ -289,7 +289,7 @@ mediaPlayerPlayback: FilledSlider {
 	activeFg: mediaPlayerActiveFg;
 	inactiveFg: mediaPlayerInactiveFg;
 	disabledFg: mediaPlayerDisabledFg;
-	duration: 135;
+	duration: 150;
 }
 
 mediaPlayerPanelMarginLeft: 10px;

@@ -21,9 +21,6 @@
 #endif
 
 const QVector<QString> icons{
-#ifdef Q_OS_MAC
-	AyuAssets::DEFAULT_MACOS_ICON,
-#endif
 	AyuAssets::DEFAULT_ICON,
 	AyuAssets::ALT_ICON,
 	AyuAssets::DISCORD_ICON,
@@ -44,21 +41,24 @@ const auto rows = static_cast<int>(icons.size()) / 4 + std::min(1, static_cast<i
 void drawIcon(QPainter &p, const QImage &icon, int xOffset, int yOffset, float strokeOpacity) {
 	xOffset += st::cpPadding;
 
-	p.save();
-	p.setPen(QPen(st::boxDividerBg, 0));
-	p.setBrush(QBrush(st::boxDividerBg));
-	p.setOpacity(strokeOpacity);
-	p.drawRoundedRect(
-		xOffset + st::cpSelectedPadding,
-		yOffset + st::cpSelectedPadding,
-		st::cpIconSize + st::cpSelectedPadding * 2,
-		st::cpIconSize + st::cpSelectedPadding * 2,
-		st::cpSelectedRounding,
-		st::cpSelectedRounding
-	);
-	p.restore();
+	{
+		PainterHighQualityEnabler hq(p);
+		p.save();
+		p.setPen(QPen(st::boxDividerBg, 0));
+		p.setBrush(QBrush(st::boxDividerBg));
+		p.setOpacity(strokeOpacity);
+		p.drawRoundedRect(
+			xOffset + st::cpSelectedPadding,
+			yOffset + st::cpSelectedPadding,
+			st::cpIconSize + st::cpSelectedPadding * 2,
+			st::cpIconSize + st::cpSelectedPadding * 2,
+			st::cpSelectedRounding,
+			st::cpSelectedRounding
+		);
+		p.restore();
+	}
 
-	auto rect = QRect(
+	const auto rect = QRect(
 		xOffset + st::cpImagePadding,
 		yOffset + st::cpImagePadding,
 		st::cpIconSize,
@@ -87,9 +87,9 @@ IconPicker::IconPicker(QWidget *parent)
 IconPicker::~IconPicker() {
 	cachedIcons.clear();
 }
+
 void IconPicker::paintEvent(QPaintEvent *e) {
 	Painter p(this);
-	PainterHighQualityEnabler hq(p);
 
 	auto offset = st::boxWidth / 2 - (st::cpIconSize + st::cpSpacingX) * 2;
 
@@ -106,11 +106,7 @@ void IconPicker::paintEvent(QPaintEvent *e) {
 			if (const auto cached = cachedIcons.find(iconName); cached != cachedIcons.end()) {
 				icon = cached->second;
 			} else {
-				icon = cachedIcons[iconName] = AyuAssets::loadPreview(iconName).scaled(
-					st::cpIconSize,
-					st::cpIconSize,
-					Qt::KeepAspectRatio,
-					Qt::SmoothTransformation);
+				icon = cachedIcons[iconName] = AyuAssets::loadPreview(iconName);
 			}
 			auto opacity = 0.0f;
 			if (iconName == wasSelected) {

@@ -9,6 +9,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "mainwindow.h"
 #include "mainwidget.h"
+#include "main/main_account.h"
+#include "main/main_domain.h"
+#include "main/main_session.h"
+#include "data/data_user.h"
 #include "calls/calls_instance.h"
 #include "core/sandbox.h"
 #include "core/application.h"
@@ -37,6 +41,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <CoreFoundation/CFURL.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/hidsystem/ev_keymap.h>
+
+// AyuGram includes
+#include "ayu/ayu_settings.h"
 
 using Platform::Q2NSString;
 using Platform::NS2QString;
@@ -223,6 +230,40 @@ ApplicationDelegate *_sharedDelegate = nil;
 	RpMenu* dockMenu = [[[RpMenu alloc] initWithTitle: @""] autorelease];
 	[dockMenu setAutoenablesItems:false];
 
+	const auto accounts = Core::App().domain().orderedAccounts();
+	if (accounts.size() > 1) {
+		[dockMenu addItem:[NSMenuItem separatorItem]];
+		NSMenuItem *profilesHeader = [[NSMenuItem alloc]
+			initWithTitle:@"" action:nil keyEquivalent:@""];
+		NSDictionary *attributes = @{
+			NSFontAttributeName: [NSFont
+				menuFontOfSize:[NSFont smallSystemFontSize]],
+			NSForegroundColorAttributeName: [NSColor secondaryLabelColor]
+		};
+		NSAttributedString *attrTitle = [[NSAttributedString alloc]
+			initWithString:Q2NSString(tr::lng_mac_menu_profiles(tr::now))
+			attributes:attributes];
+		[profilesHeader setAttributedTitle:attrTitle];
+		[attrTitle release];
+		[profilesHeader setEnabled:NO];
+		[dockMenu addItem:[profilesHeader autorelease]];
+		constexpr auto kMaxLength = 30;
+		for (const auto &account : accounts) {
+			if (account->sessionExists()) {
+				auto name = account->session().user()->name();
+				[dockMenu addItem:CreateMenuItem(
+					(name.size() > kMaxLength)
+						? (name.mid(0, kMaxLength) + Ui::kQEllipsis)
+						: name,
+					[dockMenu lifetime],
+					[account] {
+						Core::App().ensureSeparateWindowFor(account);
+					})];
+			}
+		}
+		[dockMenu addItem:[NSMenuItem separatorItem]];
+	}
+
 	auto notifyCallback = [] {
 		auto &settings = Core::App().settings();
 		settings.setDesktopNotify(!settings.desktopNotify());
@@ -264,13 +305,26 @@ ApplicationDelegate *_sharedDelegate = nil;
 namespace Platform {
 
 void SetApplicationIcon(const QIcon &icon) {
-	NSImage *image = nil;
-	if (!icon.isNull()) {
-		auto pixmap = icon.pixmap(1024, 1024);
-		pixmap.setDevicePixelRatio(style::DevicePixelRatio());
-		image = Q2NSImage(pixmap.toImage());
-	}
-	[[NSApplication sharedApplication] setApplicationIconImage:image];
+	const auto &settings = AyuSettings::getInstance();
+    if (settings.appIcon.isEmpty()) {
+        return;
+    }
+
+	const auto name = QString("AppIcon-") + settings.appIcon[0].toUpper() + settings.appIcon.mid(1);
+    @autoreleasepool {
+        if (name == QString("AppIcon-Default")) {
+            NSApplication.sharedApplication.applicationIconImage = nil;
+            return;
+        }
+        
+        // NSString *iconPath = [NSBundle.mainBundle pathForResource:Q2NSString(name) ofType:@"icns"];
+        // NSImage *icon = [[NSImage alloc] initWithContentsOfFile:iconPath];
+		NSImage *icon = [NSBundle.mainBundle imageForResource:Q2NSString(name)];
+
+        if (icon) {
+            NSApplication.sharedApplication.applicationIconImage = icon;
+        }
+    }
 }
 
 } // namespace Platform

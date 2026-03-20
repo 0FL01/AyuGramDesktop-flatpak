@@ -30,7 +30,13 @@ private:
 	AyuLanguage();
 	~AyuLanguage() override = default;
 
+	void loadCachedLanguage();
+	void saveCachedLanguage(const QByteArray &json, const QString &langId);
+	[[nodiscard]] QString getCacheDir() const;
+	[[nodiscard]] QString getCachePath(const QString &langId) const;
+
 	QNetworkAccessManager networkManager;
 	QNetworkReply *_chkReply = nullptr;
 	bool needFallback = false;
+	QString _currentLangId;
 };

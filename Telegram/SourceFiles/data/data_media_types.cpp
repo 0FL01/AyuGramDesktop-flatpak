@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_location_manager.h"
 #include "history/view/history_view_element.h"
 #include "history/view/history_view_item_preview.h"
+#include "history/view/media/history_view_birthday_suggestion.h"
 #include "history/view/media/history_view_photo.h"
 #include "history/view/media/history_view_sticker.h"
 #include "history/view/media/history_view_gif.h"
@@ -115,10 +116,10 @@ struct AlbumCounts {
 				tr::now,
 				lt_media,
 				Ui::Text::Colorized(attachType),
-				Ui::Text::WithEntities),
+				tr::marked),
 			lt_caption,
 			wrapped,
-			Ui::Text::WithEntities);
+			tr::marked);
 }
 
 [[nodiscard]] QImage PreparePreviewImage(
@@ -225,8 +226,8 @@ template <typename MediaType>
 	Expects(media->owner()->hasThumbnail());
 
 	const auto document = media->owner();
-	const auto readyCacheKey = CountCacheKey(document, radius, spoiler);
 	if (const auto thumbnail = media->thumbnail()) {
+		const auto readyCacheKey = CountCacheKey(document, radius, spoiler);
 		return {
 			PreparePreviewImage(thumbnail, radius, spoiler),
 			readyCacheKey,
@@ -259,7 +260,8 @@ template <typename MediaType>
 		bool spoiler) {
 	auto result = PreparePhotoPreviewImage(item, media, radius, spoiler);
 	if (!result.data.isNull()
-		&& media->owner()->extendedMediaVideoDuration().has_value()) {
+		&& (media->owner()->extendedMediaVideoDuration().has_value()
+			|| (item->media() && item->media()->videoCover()))) {
 		result.data = PutPlayIcon(std::move(result.data));
 	}
 	return result;
@@ -665,6 +667,10 @@ FullStoryId Media::storyId() const {
 }
 
 bool Media::storyExpired(bool revalidate) {
+	return false;
+}
+
+bool Media::storyUnsupported() const {
 	return false;
 }
 
@@ -1157,7 +1163,28 @@ ItemPreview MediaFile::toPreview(ToPreviewOptions options) const {
 	const auto radius = _document->isVideoMessage()
 		? ImageRoundRadius::Ellipse
 		: ImageRoundRadius::Small;
-	if (auto found = FindCachedPreview(
+	if (_videoCover) {
+		if (auto found = FindCachedPreview(
+				existing,
+				not_null{ _videoCover },
+				radius,
+				spoilered)) {
+			images.push_back(std::move(found));
+		} else {
+			const auto media = _videoCover->createMediaView();
+			if (auto prepared = PreparePhotoPreview(
+					parent(),
+					media,
+					radius,
+					_spoiler)
+				; prepared || !prepared.cacheKey) {
+				images.push_back(std::move(prepared));
+				if (!prepared.cacheKey) {
+					context = media;
+				}
+			}
+		}
+	} else if (auto found = FindCachedPreview(
 			existing,
 			_document,
 			radius,
@@ -1970,6 +1997,10 @@ std::unique_ptr<HistoryView::Media> MediaWebPage::createView(
 		not_null<HistoryView::Element*> message,
 		not_null<HistoryItem*> realParent,
 		HistoryView::Element *replacing) {
+	if (realParent->hideLinks()) {
+		realParent->setHasHiddenLinks(true);
+		return nullptr;
+	}
 	return std::make_unique<HistoryView::WebPage>(message, _page, _flags);
 }
 
@@ -2210,8 +2241,7 @@ ItemPreview MediaInvoice::toPreview(ToPreviewOptions options) const {
 			? parent()->translatedText()
 			: parent()->originalText());
 	const auto hasMiniImages = !images.empty();
-	auto nice = Ui::Text::Colorized(
-		Ui::CreditsEmojiSmall(&parent()->history()->session()));
+	auto nice = Ui::Text::Colorized(Ui::CreditsEmojiSmall());
 	nice.append(WithCaptionNotificationText(type, caption, hasMiniImages));
 	return {
 		.text = std::move(nice),
@@ -2345,7 +2375,7 @@ TodoListData *MediaTodoList::todolist() const {
 
 TextWithEntities MediaTodoList::notificationText() const {
 	return TextWithEntities()
-		.append(QChar(0x2611))
+		.append(QChar(0x2705))
 		.append(QChar(' '))
 		.append(Ui::Text::Colorized(_todolist->title));
 }
@@ -2480,7 +2510,7 @@ ClickHandlerPtr MediaDice::MakeHandler(
 			.duration = Ui::Toast::kDefaultDuration * 2,
 		};
 		if (CanSend(history->peer, ChatRestriction::SendOther)) {
-			auto link = Ui::Text::Link(tr::lng_about_random_send(tr::now));
+			auto link = tr::link(tr::lng_about_random_send(tr::now));
 			link.entities.push_back(
 				EntityInText(EntityType::Semibold, 0, link.text.size()));
 			config.text.append(' ').append(std::move(link));
@@ -2564,15 +2594,32 @@ std::unique_ptr<HistoryView::Media> MediaGiftBox::createView(
 		not_null<HistoryView::Element*> message,
 		not_null<HistoryItem*> realParent,
 		HistoryView::Element *replacing) {
-	if (const auto &unique = _data.unique) {
+	if (_data.type == GiftType::BirthdaySuggest) {
+		return std::make_unique<HistoryView::MediaGeneric>(
+			message,
+			HistoryView::GenerateSuggetsBirthdayMedia(
+				message,
+				replacing,
+				Data::Birthday::FromSerialized(_data.count)),
+			HistoryView::MediaGenericDescriptor{
+				.maxWidth = st::birthdaySuggestStickerWidth,
+				.service = true,
+				.hideServiceText = true,
+			});
+	} else if (_data.type == GiftType::ChatTheme
+		|| _data.type == GiftType::GiftOffer) {
+		return std::make_unique<HistoryView::ServiceBox>(
+			message,
+			std::make_unique<HistoryView::GiftServiceBox>(message, this));
+	} else if (const auto &unique = _data.unique) {
 		return std::make_unique<HistoryView::MediaGeneric>(
 			message,
 			HistoryView::GenerateUniqueGiftMedia(message, replacing, unique),
 			HistoryView::MediaGenericDescriptor{
-				.maxWidth = (_data.stargiftReleasedBy
-					? st::msgServiceStarGiftByWidth
-					: st::msgServiceGiftBoxSize.width()),
-				.paintBg = HistoryView::UniqueGiftBg(message, unique),
+				.maxWidth = st::msgServiceGiftBoxSize.width(),
+				.paintBgFactory = [=] {
+					return HistoryView::UniqueGiftBg(message, unique);
+				},
 				.service = true,
 			});
 	}
@@ -2649,7 +2696,9 @@ MediaStory::MediaStory(
 	if (!maybeStory && maybeStory.error() == NoStory::Unknown) {
 		stories->resolve(storyId, crl::guard(this, [=] {
 			if (const auto maybeStory = stories->lookup(storyId)) {
-				if (!_mention && _viewMayExist) {
+				if ((*maybeStory)->unsupported() || (*maybeStory)->call()) {
+					_unsupported = true;
+				} else if (!_mention && _viewMayExist) {
 					parent->setText((*maybeStory)->caption());
 				}
 			} else {
@@ -2682,12 +2731,19 @@ bool MediaStory::storyExpired(bool revalidate) {
 	if (revalidate) {
 		const auto stories = &parent()->history()->owner().stories();
 		if (const auto maybeStory = stories->lookup(_storyId)) {
+			if ((*maybeStory)->unsupported() || (*maybeStory)->call()) {
+				_unsupported = true;
+			}
 			_expired = false;
 		} else if (maybeStory.error() == Data::NoStory::Deleted) {
 			_expired = true;
 		}
 	}
 	return _expired;
+}
+
+bool MediaStory::storyUnsupported() const {
+	return _unsupported;
 }
 
 bool MediaStory::storyMention() const {
@@ -2766,7 +2822,10 @@ std::unique_ptr<HistoryView::Media> MediaStory::createView(
 	_expired = false;
 	_viewMayExist = true;
 	const auto story = *maybeStory;
-	if (_mention) {
+	if (story->unsupported() || story->call()) {
+		_unsupported = true;
+		return nullptr;
+	} else if (_mention) {
 		return std::make_unique<HistoryView::ServiceBox>(
 			message,
 			std::make_unique<HistoryView::StoryMention>(message, story));
@@ -2778,13 +2837,14 @@ std::unique_ptr<HistoryView::Media> MediaStory::createView(
 				realParent,
 				photo,
 				spoiler);
-		} else {
+		} else if (const auto document = story->document()) {
 			return std::make_unique<HistoryView::Gif>(
 				message,
 				realParent,
-				story->document(),
+				document,
 				spoiler);
 		}
+		return nullptr;
 	}
 }
 

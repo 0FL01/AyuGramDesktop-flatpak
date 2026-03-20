@@ -83,8 +83,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 
 // AyuGram includes
-#include "ayu/ui/settings/settings_ayu.h"
-#include "ayu/features/messageshot/message_shot.h"
+#include "ayu/features/message_shot/message_shot.h"
 #include "window/themes/window_theme_preview.h"
 
 
@@ -182,7 +181,7 @@ ColorsPalette::Button::Button(
 	_widget.show();
 	_widget.resize(st::settingsAccentColorSize, st::settingsAccentColorSize);
 	_widget.paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		paint();
 	}, _widget.lifetime());
 }
@@ -246,7 +245,7 @@ ColorsPalette::ColorsPalette(not_null<Ui::VerticalLayout*> container)
 
 	const auto inner = _outer->entity();
 	inner->widthValue(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		updateInnerGeometry();
 	}, inner->lifetime());
 }
@@ -317,7 +316,7 @@ void ColorsPalette::show(
 				clicks
 			) | rpl::map([=] {
 				return _buttons[index - 1]->color();
-			}) | rpl::start_with_next([=](QColor color) {
+			}) | rpl::on_next([=](QColor color) {
 				_selected.fire_copy(color);
 			}, inner->lifetime());
 		}
@@ -327,7 +326,7 @@ void ColorsPalette::show(
 	if (clicks) {
 		std::move(
 			clicks
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			selectCustom(scheme);
 		}, inner->lifetime());
 	}
@@ -351,7 +350,7 @@ void ColorsPalette::selectCustom(not_null<const Scheme*> scheme) {
 			box->closeBox();
 		});
 		editor->submitRequests(
-		) | rpl::start_with_next(save, editor->lifetime());
+		) | rpl::on_next(save, editor->lifetime());
 		editor->setLightnessLimits(
 			colorizer.lightnessMin,
 			colorizer.lightnessMax);
@@ -371,15 +370,18 @@ rpl::producer<QColor> ColorsPalette::selected() const {
 }
 
 void ColorsPalette::updateInnerGeometry() {
-	if (_buttons.size() < 2) {
+	const auto count = int(_buttons.size());
+	if (count < 2) {
 		return;
 	}
 	const auto inner = _outer->entity();
 	const auto size = st::settingsAccentColorSize;
 	const auto padding = st::settingsButtonNoIcon.padding;
 	const auto width = inner->width() - padding.left() - padding.right();
-	const auto skip = (width - size * _buttons.size())
-		/ float64(_buttons.size() - 1);
+	if (width < size * count) {
+		return;
+	}
+	const auto skip = (width - size * count) / float64(count - 1);
 	const auto y = st::defaultVerticalListSkip * 2;
 	auto x = float64(padding.left());
 	for (const auto &button : _buttons) {
@@ -475,7 +477,7 @@ BackgroundRow::BackgroundRow(
 		return (update.type == Update::Type::New
 			|| update.type == Update::Type::Start
 			|| update.type == Update::Type::Changed);
-	}) | rpl::start_with_next([=] {
+	}) | rpl::on_next([=] {
 		updateImage();
 	}, lifetime());
 }
@@ -742,7 +744,7 @@ void SetupStickersEmoji(
 			checkbox(label, checked),
 			st::settingsCheckboxPadding
 		)->checkedChanges(
-		) | rpl::start_with_next(
+		) | rpl::on_next(
 			std::move(handle),
 			inner->lifetime());
 	};
@@ -757,7 +759,7 @@ void SetupStickersEmoji(
 				checkbox(label, checked),
 				st::settingsCheckboxPadding)
 		)->setDuration(0)->toggleOn(std::move(shown))->entity()->checkedChanges(
-		) | rpl::start_with_next(
+		) | rpl::on_next(
 			std::move(handle),
 			inner->lifetime());
 	};
@@ -938,7 +940,7 @@ void SetupMessages(
 	auto selected = rpl::duplicate(idValue);
 	std::move(
 		selected
-	) | rpl::start_with_next([=, idValue = std::move(idValue)](
+	) | rpl::on_next([=, idValue = std::move(idValue)](
 			const Data::ReactionId &id) {
 		const auto index = state->icons.flag ? 1 : 0;
 		const auto iconSize = st::settingsReactionRightIcon;
@@ -983,7 +985,7 @@ void SetupMessages(
 	}, buttonRight->lifetime());
 
 	react->geometryValue(
-	) | rpl::start_with_next([=](const QRect &r) {
+	) | rpl::on_next([=](const QRect &r) {
 		const auto rightSize = buttonRight->size();
 		buttonRight->moveToRight(
 			st::settingsButtonRightSkip,
@@ -1009,7 +1011,7 @@ void SetupMessages(
 			st::settingsCheckbox),
 		st::settingsCheckboxPadding
 	)->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setCornerReaction(checked);
 		Core::App().saveSettingsDelayed();
 	}, inner->lifetime());
@@ -1150,7 +1152,7 @@ void SetupDataStorage(
 	ask->toggledValue(
 	) | rpl::filter([](bool checked) {
 		return (checked != Core::App().settings().askDownloadPath());
-	}) | rpl::start_with_next([=](bool checked) {
+	}) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setAskDownloadPath(checked);
 		Core::App().saveSettingsDelayed();
 
@@ -1251,7 +1253,7 @@ void SetupChatBackground(
 			st::settingsSendTypePadding));
 
 	tile->entity()->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		background->setTile(checked);
 	}, tile->lifetime());
 
@@ -1266,7 +1268,7 @@ void SetupChatBackground(
 	) | rpl::filter([](const Update &update) {
 		return (update.type == Update::Type::Changed)
 			|| (update.type == Update::Type::New);
-	}) | rpl::start_with_next([=] {
+	}) | rpl::on_next([=] {
 		tile->entity()->setChecked(background->tile());
 		tile->toggle(shown(), anim::type::instant);
 	}, tile->lifetime());
@@ -1277,7 +1279,7 @@ void SetupChatBackground(
 	}));
 
 	adaptive->entity()->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setAdaptiveForWide(checked);
 		Core::App().saveSettingsDelayed();
 	}, adaptive->lifetime());
@@ -1321,7 +1323,7 @@ void SetupChatListQuickAction(
 			std::unique_ptr<Lottie::Icon> icon;
 		};
 		const auto state = widget->lifetime().make_state<State>();
-		group->value() | rpl::start_with_next([=](Type value) {
+		group->value() | rpl::on_next([=](Type value) {
 			const auto label = actionToLabel(value);
 			state->icon = Lottie::MakeIcon({
 				.name = Dialogs::ResolveQuickDialogLottieIconName(label),
@@ -1335,8 +1337,9 @@ void SetupChatListQuickAction(
 				state->icon->framesCount() - 1);
 			widget->update();
 		}, widget->lifetime());
-		widget->paintRequest() | rpl::start_with_next([=] {
+		widget->paintRequest() | rpl::on_next([=] {
 			auto p = QPainter(widget);
+			auto hq = PainterHighQualityEnabler(p);
 
 			const auto height = st::dialogsRowHeight;
 			const auto actionWidth = st::dialogsQuickActionRippleSize * 0.75;
@@ -1365,7 +1368,6 @@ void SetupChatListQuickAction(
 			const auto label = actionToLabel(group->current());
 			const auto isDisabled = (label == LabelType::Disabled);
 
-			auto hq = PainterHighQualityEnabler(p);
 			p.fillRect(
 				QRect(0, 0, rect::right(rect), st::lineWidth),
 				st::windowBgOver);
@@ -1449,14 +1451,14 @@ void SetupChatListQuickAction(
 		icon->resize(st::menuIconArchive.size());
 		icon->show();
 		button->sizeValue(
-		) | rpl::start_with_next([=, left = st.iconLeft](QSize size) {
+		) | rpl::on_next([=, left = st.iconLeft](QSize size) {
 			icon->moveToLeft(
 				left,
 				(size.height() - icon->height()) / 2,
 				size.width());
 		}, icon->lifetime());
 		icon->paintRequest(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			auto p = QPainter(icon);
 			const auto value = group->current();
 			((value == Dialogs::Ui::QuickDialogAction::Mute)
@@ -1601,7 +1603,7 @@ void SetupDefaultThemes(
 			std::move(check));
 		rpl::duplicate(
 			scheme.name
-		) | rpl::start_with_next([=](const QString &themeName) {
+		) | rpl::on_next([=](const QString &themeName) {
 			result->setText(themeName);
 		}, result->lifetime());
 		result->addClickHandler([=] {
@@ -1658,7 +1660,15 @@ void SetupDefaultThemes(
 			return;
 		}
 
-		group->setValue(chosen());
+		const auto scheme = ranges::find(
+			kSchemesList,
+			type,
+			&Scheme::type);
+		if (scheme != end(kSchemesList)) {
+			apply(*scheme);
+		} else {
+			group->setValue(chosen());
+		}
 	});
 	for (const auto &scheme : kSchemesList) {
 		refreshColorizer(scheme.type);
@@ -1669,7 +1679,7 @@ void SetupDefaultThemes(
 		return (update.type == BackgroundUpdate::Type::ApplyingTheme);
 	}) | rpl::map([=] {
 		return chosen();
-	}) | rpl::start_with_next([=](Type type) {
+	}) | rpl::on_next([=](Type type) {
 		refreshColorizer(type);
 		group->setValue(type);
 	}, container->lifetime());
@@ -1680,7 +1690,7 @@ void SetupDefaultThemes(
 	}
 	block->resize(block->width(), buttons[0]->height());
 	block->widthValue(
-	) | rpl::start_with_next([buttons = std::move(buttons)](int width) {
+	) | rpl::on_next([buttons = std::move(buttons)](int width) {
 		Expects(!buttons.empty());
 
 		const auto padding = st::settingsButtonNoIcon.padding;
@@ -1709,7 +1719,7 @@ void SetupDefaultThemes(
 	}, block->lifetime());
 
 	if (AyuFeatures::MessageShot::isChoosingTheme()) {
-		palette->selected() | rpl::start_with_next(
+		palette->selected() | rpl::on_next(
 			[=](QColor color)
 			{
 				AyuFeatures::MessageShot::setDefaultSelectedColor(color);
@@ -1725,7 +1735,7 @@ void SetupDefaultThemes(
 			},
 			container->lifetime());
 
-		AyuFeatures::MessageShot::resetDefaultSelectedEvents() | rpl::start_with_next([=]
+		AyuFeatures::MessageShot::resetDefaultSelectedEvents() | rpl::on_next([=]
 			{
 				refreshColorizer(AyuFeatures::MessageShot::getSelectedFromDefault()); // hide colorizer
 				group->setValue(Type(-1));
@@ -1734,11 +1744,10 @@ void SetupDefaultThemes(
 	}
 
 	palette->selected(
-	) | rpl::start_with_next([=](QColor color) {
+	) | rpl::on_next([=](QColor color) {
 		if (AyuFeatures::MessageShot::isChoosingTheme()) {
 			return;
 		}
-
 		if (Background()->editingTheme()) {
 			// We don't remember old accent color to revert it properly
 			// in Window::Theme::Revert which is called by Editor.
@@ -1805,7 +1814,7 @@ void SetupCloudThemes(
 		title->topValue(),
 		inner->widthValue(),
 		showAll->widthValue()
-	) | rpl::start_with_next([=](int top, int outerWidth, int width) {
+	) | rpl::on_next([=](int top, int outerWidth, int width) {
 		showAll->moveToRight(
 			st::defaultSubsectionTitlePadding.left(),
 			top,
@@ -1826,7 +1835,7 @@ void SetupCloudThemes(
 			0));
 
 	list->allShown(
-	) | rpl::start_with_next([=](bool shown) {
+	) | rpl::on_next([=](bool shown) {
 		showAll->setVisible(!shown);
 	}, showAll->lifetime());
 
@@ -2054,7 +2063,7 @@ void SetupSupport(
 			st::settingsCheckbox),
 		st::settingsSendTypePadding
 	)->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		controller->session().settings().setSupportTemplatesAutocomplete(
 			checked);
 		controller->session().saveSettingsDelayed();
@@ -2068,7 +2077,7 @@ void SetupSupport(
 			st::settingsCheckbox),
 		st::settingsSendTypePadding
 	)->checkedChanges(
-	) | rpl::start_with_next([=](bool checked) {
+	) | rpl::on_next([=](bool checked) {
 		controller->session().settings().setSupportAllSilent(
 			checked);
 		controller->session().saveSettingsDelayed();

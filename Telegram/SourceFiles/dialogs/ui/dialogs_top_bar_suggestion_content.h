@@ -11,14 +11,32 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 namespace Ui {
 class DynamicImage;
+class GenericBox;
 class IconButton;
+class VerticalLayout;
+template<typename Widget>
+class SlideWrap;
 } // namespace Ui
 
 namespace Ui::Text {
 struct MarkedContext;
 } // namespace Ui::Text
 
+namespace Data {
+struct UnreviewedAuth;
+} // namespace Data
+
 namespace Dialogs {
+
+not_null<Ui::SlideWrap<Ui::VerticalLayout>*> CreateUnconfirmedAuthContent(
+		not_null<Ui::RpWidget*> parent,
+		const std::vector<Data::UnreviewedAuth> &list,
+		Fn<void(bool)> callback);
+
+void ShowAuthDeniedBox(
+	not_null<Ui::GenericBox*> box,
+	float64 count,
+	const QString &messageText);
 
 class TopBarSuggestionContent : public Ui::RippleButton {
 public:
@@ -28,18 +46,24 @@ public:
 		Arrow,
 	};
 
-	TopBarSuggestionContent(not_null<Ui::RpWidget*>);
+	TopBarSuggestionContent(
+		not_null<Ui::RpWidget*> parent,
+		Fn<bool()> emojiPaused = nullptr);
 
 	void setContent(
 		TextWithEntities title,
 		TextWithEntities description,
-		std::optional<Ui::Text::MarkedContext> context = std::nullopt);
+		std::optional<Ui::Text::MarkedContext> context = std::nullopt,
+		std::optional<QColor> descriptionColorOverride = std::nullopt);
 
 	[[nodiscard]] rpl::producer<int> desiredHeightValue() const override;
 
 	void setHideCallback(Fn<void()>);
 	void setRightIcon(RightIcon);
-	void setLeftPadding(int);
+	void setRightButton(
+		rpl::producer<TextWithEntities> text,
+		Fn<void()> callback);
+	void setLeftPadding(rpl::producer<int>);
 
 	[[nodiscard]] const style::TextStyle &contentTitleSt() const;
 
@@ -57,10 +81,13 @@ private:
 	Ui::Text::String _contentText;
 	rpl::variable<int> _lastPaintedContentLineAmount = 0;
 	rpl::variable<int> _lastPaintedContentTop = 0;
+	std::optional<QColor> _descriptionColorOverride;
 
 	base::unique_qptr<Ui::IconButton> _rightHide;
 	base::unique_qptr<Ui::IconButton> _rightArrow;
+	base::unique_qptr<Ui::RoundButton> _rightButton;
 	Fn<void()> _hideCallback;
+	Fn<bool()> _emojiPaused;
 
 	int _leftPadding = 0;
 

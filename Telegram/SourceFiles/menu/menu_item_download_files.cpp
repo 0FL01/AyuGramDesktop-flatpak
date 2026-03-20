@@ -102,10 +102,10 @@ void AddAction(
 							: tr::lng_mediaview_saved_to)(
 						tr::now,
 						lt_downloads,
-						Ui::Text::Link(
+						tr::link(
 							tr::lng_mediaview_downloads(tr::now),
 							"internal:show_saved_message"),
-						Ui::Text::WithEntities),
+						tr::marked),
 					.filter = filter,
 					.st = &st::defaultToast,
 				});
@@ -150,7 +150,7 @@ void AddAction(
 		} else {
 			auto lifetime = std::make_shared<rpl::lifetime>();
 			session->downloaderTaskFinished(
-			) | rpl::start_with_next([=]() mutable {
+			) | rpl::on_next([=]() mutable {
 				if (finalCheck()) {
 					saveToFiles();
 					base::take(lifetime)->destroy();
@@ -232,8 +232,8 @@ void AddDownloadFilesAction(
        std::sort(photos.begin(), photos.end(), [](const auto &a, const auto &b) {
                return a.second < b.second;
        });
-	const auto done = [weak = Ui::MakeWeak(list)] {
-		if (const auto strong = weak.data()) {
+	const auto done = [weak = base::make_weak(list)] {
+		if (const auto strong = weak.get()) {
 			strong->cancelSelection();
 		}
 	};
@@ -265,8 +265,8 @@ void AddDownloadFilesAction(
        std::sort(photos.begin(), photos.end(), [](const auto &a, const auto &b) {
                return a.second < b.second;
        });
-	const auto done = [weak = Ui::MakeWeak(list)] {
-		if (const auto strong = weak.data()) {
+	const auto done = [weak = base::make_weak(list)] {
+		if (const auto strong = weak.get()) {
 			strong->clearSelected();
 		}
 	};

@@ -51,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/utils/telegram_helpers.h"
 
 
 namespace {
@@ -227,7 +228,7 @@ std::optional<SendPaymentDetails> ComputePaymentDetails(
 
 bool SuggestPaymentDataReady(
 		not_null<PeerData*> peer,
-		SuggestPostOptions suggest) {
+		SuggestOptions suggest) {
 	if (!suggest.exists || !suggest.price() || peer->amMonoforumAdmin()) {
 		return true;
 	} else if (suggest.ton && !peer->session().credits().tonLoaded()) {
@@ -248,11 +249,11 @@ object_ptr<Ui::BoxContent> MakeSendErrorBox(
 	auto text = TextWithEntities();
 	if (withTitle) {
 		text.append(
-			Ui::Text::Bold(error.thread->chatListName())
+			tr::bold(error.thread->chatListName())
 		).append("\n\n");
 	}
 	if (error.error.boostsToLift) {
-		text.append(Ui::Text::Link(error.error.text));
+		text.append(tr::link(error.error.text));
 	} else {
 		text.append(error.error.text);
 	}
@@ -360,7 +361,7 @@ void ShowSendPaidConfirm(
 	const auto messages = details.messages;
 	const auto stars = details.stars;
 	show->showBox(Box([=](not_null<Ui::GenericBox*> box) {
-		const auto trust = std::make_shared<QPointer<Ui::Checkbox>>();
+		const auto trust = std::make_shared<base::weak_qptr<Ui::Checkbox>>();
 		const auto proceed = [=](Fn<void()> close) {
 			if (singlePeer && (*trust)->checked()) {
 				const auto session = &singlePeer->session();
@@ -378,15 +379,15 @@ void ShowSendPaidConfirm(
 					lt_count,
 					stars / messages,
 					lt_name,
-					Ui::Text::Bold(singlePeer->shortName()),
-					Ui::Text::RichLangValue)
+					tr::bold(singlePeer->shortName()),
+					tr::rich)
 				: (usersOnly
 					? tr::lng_payment_confirm_users
 					: tr::lng_payment_confirm_chats)(
 						tr::now,
 						lt_count,
 						int(peers.size()),
-						Ui::Text::RichLangValue)).append(' ').append(
+						tr::rich)).append(' ').append(
 							tr::lng_payment_confirm_sure(
 								tr::now,
 								lt_count,
@@ -396,8 +397,8 @@ void ShowSendPaidConfirm(
 									tr::now,
 									lt_count,
 									stars,
-									Ui::Text::RichLangValue),
-								Ui::Text::RichLangValue)),
+									tr::rich),
+								tr::rich)),
 			.confirmed = proceed,
 			.confirmText = tr::lng_payment_confirm_button(
 				lt_count,
@@ -464,7 +465,7 @@ bool SendPaymentHelper::check(
 			peer->session().credits().loadedValue(
 			) | rpl::filter(
 				rpl::mappers::_1
-			) | rpl::take(1) | rpl::start_with_next([=] {
+			) | rpl::take(1) | rpl::on_next([=] {
 				if (const auto callback = base::take(_resend)) {
 					callback();
 				}
@@ -476,7 +477,7 @@ bool SendPaymentHelper::check(
 			peer->session().credits().tonLoadedValue(
 			) | rpl::filter(
 				rpl::mappers::_1
-			) | rpl::take(1) | rpl::start_with_next([=] {
+			) | rpl::take(1) | rpl::on_next([=] {
 				if (const auto callback = base::take(_resend)) {
 					callback();
 				}
@@ -486,7 +487,7 @@ bool SendPaymentHelper::check(
 		peer->session().changes().peerUpdates(
 			peer,
 			Data::PeerUpdate::Flag::FullInfo
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			if (const auto callback = base::take(_resend)) {
 				callback();
 			}
@@ -645,6 +646,10 @@ bool LookupReplyIsTopicPost(HistoryItem *replyTo) {
 TextWithEntities DropDisallowedCustomEmoji(
 		not_null<PeerData*> to,
 		TextWithEntities text) {
+	if (true) { // AyuGram: allow all premium emojis (via tg://emoji?id=...)
+		return text;
+	}
+
 	if (to->session().premium() || to->isSelf()) {
 		return text;
 	}
@@ -891,15 +896,16 @@ MTPMessageReplyHeader NewMessageReplyHeader(const Api::SendAction &action) {
 			? PeerId()
 			: replyTo.messageId.peer;
 		const auto replyToTop = LookupReplyToTop(action.history, replyTo);
+		const auto quoteNormalized = reverseLocalPremiumEmoji(replyTo.quote, action.history, true);
 		auto quoteEntities = Api::EntitiesToMTP(
 			&action.history->session(),
-			replyTo.quote.entities,
+			quoteNormalized.entities,
 			Api::ConvertOption::SkipLocal);
 		return MTP_messageReplyHeader(
 			MTP_flags(Flag::f_reply_to_msg_id
 				| (replyToTop ? Flag::f_reply_to_top_id : Flag())
 				| (externalPeerId ? Flag::f_reply_to_peer_id : Flag())
-				| (replyTo.quote.empty()
+				| (quoteNormalized.empty()
 					? Flag()
 					: (Flag::f_quote
 						| Flag::f_quote_text
@@ -1005,6 +1011,8 @@ MediaCheckResult CheckMessageMedia(const MTPMessageMedia &media) {
 		return Result::Good;
 	}, [](const MTPDmessageMediaPaidMedia &) {
 		return Result::Good;
+	}, [](const MTPDmessageMediaVideoStream &) {
+		return Result::Good;
 	}, [](const MTPDmessageMediaUnsupported &) {
 		return Result::Unsupported;
 	});
@@ -1041,14 +1049,14 @@ PreparedServiceText GenerateJoinedText(
 			: tr::lng_action_add_you)(
 				tr::now,
 				lt_from,
-				Ui::Text::Link(inviter->name(), QString()),
-				Ui::Text::WithEntities);
+				tr::link(inviter->name(), QString()),
+				tr::marked);
 		return result;
 	} else if (history->peer->isMegagroup()) {
 		if (viaRequest) {
 			return { tr::lng_action_you_joined_by_request(
 				tr::now,
-				Ui::Text::WithEntities) };
+				tr::marked) };
 		}
 		auto self = history->session().user();
 		auto result = PreparedServiceText();
@@ -1056,15 +1064,15 @@ PreparedServiceText GenerateJoinedText(
 		result.text = tr::lng_action_user_joined(
 			tr::now,
 			lt_from,
-			Ui::Text::Link(self->name(), QString()),
-			Ui::Text::WithEntities);
+			tr::link(self->name(), QString()),
+			tr::marked);
 		return result;
 	}
 	return { viaRequest
 		? tr::lng_action_you_joined_by_request_channel(
 			tr::now,
-			Ui::Text::WithEntities)
-		: tr::lng_action_you_joined(tr::now, Ui::Text::WithEntities) };
+			tr::marked)
+		: tr::lng_action_you_joined(tr::now, tr::marked) };
 }
 
 not_null<HistoryItem*> GenerateJoinedMessage(
@@ -1285,14 +1293,14 @@ void ShowTrialTranscribesToast(int left, TimeId until) {
 			left,
 			lt_date,
 			{ date },
-			Ui::Text::WithEntities)
+			tr::marked)
 		: tr::lng_audio_transcribe_trials_over(
 			tr::now,
 			lt_date,
-			Ui::Text::Bold(date),
+			tr::bold(date),
 			lt_link,
-			Ui::Text::Link(tr::lng_settings_privacy_premium_link(tr::now)),
-			Ui::Text::WithEntities);
+			tr::link(tr::lng_settings_privacy_premium_link(tr::now)),
+			tr::marked);
 	window->uiShow()->showToast(Ui::Toast::Config{
 		.text = text,
 		.filter = filter,

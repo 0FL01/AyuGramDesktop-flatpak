@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "data/data_auto_download.h"
+#include "data/notify/data_peer_notify_settings.h"
+#include "data/data_authorization.h"
 #include "ui/rect_part.h"
 
 namespace Support {
@@ -17,6 +19,10 @@ enum class SwitchSettings;
 namespace ChatHelpers {
 enum class SelectorTab;
 } // namespace ChatHelpers
+
+namespace Data {
+enum class SetupEmailState;
+} // namespace Data
 
 namespace Main {
 
@@ -146,6 +152,29 @@ public:
 	void setLastNonPremiumLimitUpload(TimeId when) {
 		_lastNonPremiumLimitUpload = when;
 	}
+	void setRingtoneVolume(
+		Data::DefaultNotify defaultNotify,
+		ushort volume);
+	[[nodiscard]] ushort ringtoneVolume(
+		Data::DefaultNotify defaultNotify) const;
+	void setRingtoneVolume(
+		PeerId peerId,
+		MsgId topicRootId,
+		PeerId monoforumPeerId,
+		ushort volume);
+	[[nodiscard]] ushort ringtoneVolume(
+		PeerId peerId,
+		MsgId topicRootId,
+		PeerId monoforumPeerId) const;
+
+	void markTranscriptionAsRated(uint64 transcriptionId);
+	[[nodiscard]] bool isTranscriptionRated(uint64 transcriptionId) const;
+
+	void setUnreviewed(std::vector<Data::UnreviewedAuth> auths);
+	[[nodiscard]] const std::vector<Data::UnreviewedAuth> &unreviewed() const;
+
+	void setSetupEmailState(Data::SetupEmailState state);
+	[[nodiscard]] Data::SetupEmailState setupEmailState() const;
 
 private:
 	static constexpr auto kDefaultSupportChatsLimitSlice = 7 * 24 * 60 * 60;
@@ -171,6 +200,8 @@ private:
 	rpl::variable<bool> _skipArchiveInSearch = false;
 	base::flat_map<ThreadId, MsgId> _hiddenPinnedMessages;
 	base::flat_set<PeerId> _verticalSubsectionTabs;
+	base::flat_map<Data::DefaultNotify, ushort> _ringtoneDefaultVolumes;
+	base::flat_map<ThreadId, ushort> _ringtoneVolumes;
 	bool _dialogsFiltersEnabled = false;
 	int _photoEditorHintShowsCount = 0;
 	std::vector<TimeId> _mutePeriods;
@@ -184,6 +215,12 @@ private:
 	rpl::variable<int> _supportChatsTimeSlice
 		= kDefaultSupportChatsLimitSlice;
 	rpl::variable<bool> _supportAllSearchResults = false;
+
+	base::flat_set<uint64> _ratedTranscriptions;
+
+	std::vector<Data::UnreviewedAuth> _unreviewed;
+
+	Data::SetupEmailState _setupEmailState;
 
 };
 

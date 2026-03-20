@@ -20,6 +20,10 @@ namespace ChatHelpers {
 class Show;
 } // namespace ChatHelpers
 
+namespace Data {
+struct StarGift;
+} // namespace Data
+
 namespace Ui {
 class RpWidget;
 class RoundButton;
@@ -47,11 +51,14 @@ void ShowPremium(
 void ShowGiftPremium(
 	not_null<Window::SessionController*> controller,
 	not_null<PeerData*> peer,
-	int months,
+	int days,
 	bool me);
 void ShowEmojiStatusPremium(
 	not_null<Window::SessionController*> controller,
 	not_null<PeerData*> peer);
+void ShowPremiumGiftPremium(
+	not_null<Window::SessionController*> controller,
+	const Data::StarGift &gift);
 
 void StartPremiumPayment(
 	not_null<Window::SessionController*> controller,

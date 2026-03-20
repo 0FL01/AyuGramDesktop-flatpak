@@ -11,7 +11,6 @@
 namespace AyuAssets {
 
 ICON(DEFAULT, "default");
-ICON(DEFAULT_MACOS, "macos");
 ICON(ALT, "alt");
 ICON(DISCORD, "discord");
 ICON(SPOTIFY, "spotify");
@@ -30,6 +29,6 @@ QImage loadPreview(const QString& name);
 
 QString currentAppLogoName();
 QImage currentAppLogo();
-QImage currentAppLogoNoMargin();
+QImage currentAppLogoPad();
 
 }

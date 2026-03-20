@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/chat/chat_style.h"
 #include "ui/effects/ripple_animation.h"
 #include "ui/effects/spoiler_mess.h"
+#include "ui/text/custom_emoji_helper.h"
 #include "ui/text/text_options.h"
 #include "ui/text/text_utilities.h"
 #include "ui/painter.h"
@@ -107,25 +108,11 @@ constexpr auto kNonExpandedLinesLimit = 5;
 	return style::colorizeImage(result, white);
 }
 
-[[nodiscard]] TextWithEntities TaskDoneIcon(
-		not_null<Main::Session*> session) {
-	return Ui::Text::SingleCustomEmoji(
-		session->data().customEmojiManager().registerInternalEmoji(
-			MakeTaskDoneImage(),
-			QMargins(0, st::lineWidth, st::lineWidth, 0)));
-}
-
-[[nodiscard]] TextWithEntities TaskIcon(not_null<Main::Session*> session) {
-	return Ui::Text::SingleCustomEmoji(
-		session->data().customEmojiManager().registerInternalEmoji(
-			MakeTaskImage(),
-			QMargins(0, st::lineWidth, st::lineWidth, 0)));
-}
-
 } // namespace
 
 void ValidateBackgroundEmoji(
 		DocumentId backgroundEmojiId,
+		const std::shared_ptr<Ui::ColorCollectible> &collectible,
 		not_null<Ui::BackgroundEmojiData*> data,
 		not_null<Ui::BackgroundEmojiCache*> cache,
 		not_null<Ui::Text::QuotePaintCache*> quote,
@@ -136,16 +123,43 @@ void ValidateBackgroundEmoji(
 			backgroundEmojiId,
 			crl::guard(view, [=] { view->repaint(); }));
 	}
-	ValidateBackgroundEmoji(backgroundEmojiId, data, cache, quote);
+	if (collectible && data->firstGiftFrame.isNull() && !data->gift) {
+		data->gift = CreateBackgroundGiftInstance(
+			&view->history()->owner(),
+			collectible->giftEmojiId,
+			crl::guard(view, [=] { view->repaint(); }));
+	}
+	ValidateBackgroundEmoji(data, cache, quote);
 }
 
 void ValidateBackgroundEmoji(
-		DocumentId backgroundEmojiId,
 		not_null<Ui::BackgroundEmojiData*> data,
 		not_null<Ui::BackgroundEmojiCache*> cache,
 		not_null<Ui::Text::QuotePaintCache*> quote) {
 	Expects(!data->firstFrameMask.isNull() || data->emoji != nullptr);
 
+	if (data->gift && data->firstGiftFrame.isNull()) {
+		if (data->gift->ready()) {
+			const auto tag = Data::CustomEmojiSizeTag::Normal;
+			const auto size = Data::FrameSizeFromTag(tag);
+			data->firstGiftFrame = QImage(
+				QSize(size, size),
+				QImage::Format_ARGB32_Premultiplied);
+			data->firstGiftFrame.fill(Qt::transparent);
+			data->firstGiftFrame.setDevicePixelRatio(style::DevicePixelRatio());
+			auto p = Painter(&data->firstGiftFrame);
+			data->gift->paint(p, {
+				.textColor = QColor(255, 255, 255),
+				.position = QPoint(0, 0),
+				.internal = {
+					.forceFirstFrame = true,
+				},
+			});
+			p.end();
+
+			data->gift = nullptr;
+		}
+	}
 	if (data->firstFrameMask.isNull()) {
 		if (!cache->frames[0].isNull()) {
 			for (auto &frame : cache->frames) {
@@ -220,16 +234,32 @@ auto CreateBackgroundEmojiInstance(
 		Data::CustomEmojiSizeTag::Isolated);
 }
 
+auto CreateBackgroundGiftInstance(
+	not_null<Data::Session*> owner,
+	DocumentId giftEmojiId,
+	Fn<void()> repaint)
+-> std::unique_ptr<Ui::Text::CustomEmoji> {
+	return owner->customEmojiManager().create(
+		giftEmojiId,
+		repaint,
+		Data::CustomEmojiSizeTag::Normal);
+}
+
 void FillBackgroundEmoji(
 		QPainter &p,
 		const QRect &rect,
 		bool quote,
-		const Ui::BackgroundEmojiCache &cache) {
+		const Ui::BackgroundEmojiCache &cache,
+		const QImage &firstGiftFrame) {
 	p.setClipRect(rect);
 
 	const auto &frames = cache.frames;
 	const auto right = rect.x() + rect.width();
-	const auto paint = [&](int x, int y, int index, float64 opacity) {
+	const auto paintImage = [&](
+			int x,
+			int y,
+			const QImage &frame,
+			float64 opacity) {
 		y = style::ConvertScale(y);
 		if (y >= rect.height()) {
 			return;
@@ -238,10 +268,17 @@ void FillBackgroundEmoji(
 		p.drawImage(
 			right - style::ConvertScale(x + (quote ? 12 : 0)),
 			rect.y() + y,
-			frames[index]);
+			frame);
+	};
+	const auto paint = [&](int x, int y, int index, float64 opacity) {
+		paintImage(x, y, frames[index], opacity);
 	};
 
-	paint(28, 4, 2, 0.32);
+	if (firstGiftFrame.isNull()) {
+		paint(28, 4, 2, 0.32);
+	} else {
+		paintImage(28, 4, firstGiftFrame, 1.);
+	}
 	paint(51, 15, 1, 0.32);
 	paint(64, -2, 0, 0.28);
 	paint(87, 11, 1, 0.24);
@@ -324,13 +361,23 @@ void Reply::update(
 		&& !fields.quote.empty();
 	_hasQuoteIcon = hasQuoteIcon ? 1 : 0;
 
-	const auto session = &view->history()->session();
+	const auto repaint = [=] { item->customEmojiRepaint(); };
+	auto helper = Ui::Text::CustomEmojiHelper(Core::TextContext({
+		.session = &view->history()->session(),
+		.repaint = repaint,
+	}));
 	const auto text = (!_displaying && data->unavailable())
 		? TextWithEntities()
 		: task
 		? Ui::Text::Colorized(task->completionDate
-			? TaskDoneIcon(session)
-			: TaskIcon(session)).append(task->text)
+			? helper.image({
+				.image = MakeTaskDoneImage(),
+				.margin = QMargins(0, st::lineWidth, st::lineWidth, 0),
+			})
+			: helper.image({
+				.image = MakeTaskImage(),
+				.margin = QMargins(0, st::lineWidth, st::lineWidth, 0),
+			})).append(task->text)
 		: (message && (fields.quote.empty() || !fields.manualQuote))
 		? message->inReplyText()
 		: !fields.quote.empty()
@@ -347,16 +394,11 @@ void Reply::update(
 			.ignoreTopic = true,
 		}).text
 		: TextWithEntities();
-	const auto repaint = [=] { item->customEmojiRepaint(); };
-	const auto context = Core::TextContext({
-		.session = &view->history()->session(),
-		.repaint = repaint,
-	});
 	_text.setMarkedText(
 		st::defaultTextStyle,
 		text,
 		_multiline ? Ui::ItemTextDefaultOptions() : Ui::DialogTextOptions(),
-		context);
+		helper.context());
 
 	updateName(view, data);
 
@@ -552,15 +594,16 @@ void Reply::updateName(
 		: 0;
 	auto nameFull = TextWithEntities();
 	if (displayAsExternal && !groupNameAdded && !fields.storyId) {
-		nameFull.append(PeerEmoji(history, sender));
+		nameFull.append(PeerEmoji(sender));
 	}
 	nameFull.append(name);
 	if (groupNameAdded) {
-		nameFull.append(' ').append(PeerEmoji(history, externalPeer));
+		nameFull.append(' ').append(PeerEmoji(externalPeer));
 		nameFull.append(externalPeer->name());
 	} else if (originalNameAdded) {
-		nameFull.append(' ').append(ForwardEmoji(&history->owner()));
-		nameFull.append(forwarded->originalSender
+		nameFull.append(' ').append(
+			st::historyReplyForward
+		).append(forwarded->originalSender
 			? forwarded->originalSender->name()
 			: forwarded->originalHiddenSenderInfo->name);
 	}
@@ -581,6 +624,7 @@ void Reply::updateName(
 	}
 	const auto nameMaxWidth = previewSkip
 		+ _name.maxWidth()
+		+ st::messageGiftIconSkip
 		+ (_hasQuoteIcon
 			? st::messageTextStyle.blockquote.icon.width()
 			: 0);
@@ -711,14 +755,24 @@ void Reply::paint(
 	const auto colorIndexPlusOne = _colorPeer
 		? (_colorPeer->colorIndex() + 1)
 		: _hiddenSenderColorIndexPlusOne;
+	const auto &colorCollectible = _colorPeer
+		? _colorPeer->colorCollectible()
+		: nullptr;
+	const auto useColorCollectible = colorCollectible && !context.outbg;
 	const auto useColorIndex = colorIndexPlusOne && !context.outbg;
-	const auto colorPattern = colorIndexPlusOne
+	const auto colorPattern = colorCollectible
+		? st->collectiblePatternIndex(colorCollectible)
+		: colorIndexPlusOne
 		? st->colorPatternIndex(colorIndexPlusOne - 1)
 		: 0;
 	const auto cache = !inBubble
 		? (_hasQuoteIcon
 			? st->serviceQuoteCache(colorPattern)
 			: st->serviceReplyCache(colorPattern)).get()
+		: useColorCollectible
+		? (_hasQuoteIcon
+			? st->collectibleQuoteCache(selected, colorCollectible)
+			: st->collectibleReplyCache(selected, colorCollectible)).get()
 		: useColorIndex
 		? (_hasQuoteIcon
 			? st->coloredQuoteCache(selected, colorIndexPlusOne - 1)
@@ -729,33 +783,40 @@ void Reply::paint(
 	const auto &quoteSt = _hasQuoteIcon
 		? st::messageTextStyle.blockquote
 		: st::messageQuoteStyle;
-	const auto backgroundEmoji = backgroundEmojiId
-		? st->backgroundEmojiData(backgroundEmojiId).get()
+	const auto backgroundEmojiData = backgroundEmojiId
+		? st->backgroundEmojiData(backgroundEmojiId, colorCollectible).get()
 		: nullptr;
-	const auto backgroundEmojiCache = backgroundEmoji
-		? &backgroundEmoji->caches[Ui::BackgroundEmojiData::CacheIndex(
+	const auto backgroundEmojiCache = !backgroundEmojiData
+		? nullptr
+		: useColorCollectible
+		? &backgroundEmojiData->collectibleCaches[colorCollectible]
+		: &backgroundEmojiData->caches[Ui::BackgroundEmojiData::CacheIndex(
 			selected,
 			context.outbg,
 			inBubble,
-			colorIndexPlusOne)]
-		: nullptr;
+			useColorIndex ? colorIndexPlusOne : 0)];
 	const auto rippleColor = cache->bg;
 	if (!inBubble) {
 		cache->bg = QColor(0, 0, 0, 0);
 	}
 	Ui::Text::ValidateQuotePaintCache(*cache, quoteSt);
 	Ui::Text::FillQuotePaint(p, rect, *cache, quoteSt);
-
 	const auto &settings = AyuSettings::getInstance();
-	if (!settings.simpleQuotesAndReplies && backgroundEmoji) {
+	if (!settings.simpleQuotesAndReplies && backgroundEmojiData) {
 		ValidateBackgroundEmoji(
 			backgroundEmojiId,
-			backgroundEmoji,
+			colorCollectible,
+			backgroundEmojiData,
 			backgroundEmojiCache,
 			cache,
 			view);
 		if (!backgroundEmojiCache->frames[0].isNull()) {
-			FillBackgroundEmoji(p, rect, _hasQuoteIcon, *backgroundEmojiCache);
+			FillBackgroundEmoji(
+				p,
+				rect,
+				_hasQuoteIcon,
+				*backgroundEmojiCache,
+				backgroundEmojiData->firstGiftFrame);
 		}
 	}
 	if (!inBubble) {
@@ -839,6 +900,7 @@ void Reply::paint(
 				- st::historyReplyPadding.right();
 			const auto namew = textw
 				- previewSkip
+				- st::messageGiftIconSkip
 				- (_hasQuoteIcon
 					? st::messageTextStyle.blockquote.icon.width()
 					: 0);
@@ -846,8 +908,11 @@ void Reply::paint(
 			if (namew > 0) {
 				p.setPen(!inBubble
 					? st->msgImgReplyBarColor()->c
-					: useColorIndex
-					? FromNameFg(context, colorIndexPlusOne - 1)
+					: (colorCollectible || colorIndexPlusOne)
+					? FromNameFg(
+						context,
+						colorIndexPlusOne - 1,
+						colorCollectible)
 					: stm->msgServiceFg->c);
 				_name.drawLeftElided(
 					p,
@@ -863,6 +928,8 @@ void Reply::paint(
 				view->prepareCustomEmojiPaint(p, context, _text);
 				auto replyToTextPalette = &(!inBubble
 					? st->imgReplyTextPalette()
+					: useColorCollectible
+					? st->collectibleTextPalette(selected, colorCollectible)
 					: useColorIndex
 					? st->coloredTextPalette(selected, colorIndexPlusOne - 1)
 					: stm->replyTextPalette);
@@ -940,34 +1007,16 @@ void Reply::stopLastRipple() {
 	}
 }
 
-TextWithEntities Reply::PeerEmoji(
-		not_null<History*> history,
-		PeerData *peer) {
-	return PeerEmoji(&history->owner(), peer);
-}
-
-TextWithEntities Reply::PeerEmoji(
-		not_null<Data::Session*> owner,
-		PeerData *peer) {
+TextWithEntities Reply::PeerEmoji(PeerData *peer) {
 	using namespace std;
 	const auto icon = !peer
-		? pair(&st::historyReplyUser, st::historyReplyUserPadding)
+		? &st::historyReplyUser
 		: peer->isBroadcast()
-		? pair(&st::historyReplyChannel, st::historyReplyChannelPadding)
+		? &st::historyReplyChannel
 		: (peer->isChannel() || peer->isChat())
-		? pair(&st::historyReplyGroup, st::historyReplyGroupPadding)
-		: pair(&st::historyReplyUser, st::historyReplyUserPadding);
-	return Ui::Text::SingleCustomEmoji(
-		owner->customEmojiManager().registerInternalEmoji(
-			*icon.first,
-			icon.second));
-}
-
-TextWithEntities Reply::ForwardEmoji(not_null<Data::Session*> owner) {
-	return Ui::Text::SingleCustomEmoji(
-		owner->customEmojiManager().registerInternalEmoji(
-			st::historyReplyForward,
-			st::historyReplyForwardPadding));
+		? &st::historyReplyGroup
+		: &st::historyReplyUser;
+	return Ui::Text::IconEmoji(icon);
 }
 
 TextWithEntities Reply::ComposePreviewName(
@@ -986,7 +1035,7 @@ TextWithEntities Reply::ComposePreviewName(
 				tr::now,
 				lt_title,
 				todolist->title,
-				Ui::Text::WithEntities);
+				tr::marked);
 		}
 	}
 	const auto toPeer = to->history()->peer;
@@ -1000,11 +1049,11 @@ TextWithEntities Reply::ComposePreviewName(
 	auto nameFull = TextWithEntities();
 	using namespace HistoryView;
 	if (displayAsExternal && !groupNameAdded) {
-		nameFull.append(Reply::PeerEmoji(history, sender));
+		nameFull.append(Reply::PeerEmoji(sender));
 	}
 	nameFull.append(shorten ? sender->shortName() : sender->name());
 	if (groupNameAdded) {
-		nameFull.append(' ').append(Reply::PeerEmoji(history, toPeer));
+		nameFull.append(' ').append(Reply::PeerEmoji(toPeer));
 		nameFull.append(toPeer->name());
 	}
 	return (quote
@@ -1013,7 +1062,7 @@ TextWithEntities Reply::ComposePreviewName(
 			tr::now,
 			lt_name,
 			nameFull,
-			Ui::Text::WithEntities);
+			tr::marked);
 
 }
 

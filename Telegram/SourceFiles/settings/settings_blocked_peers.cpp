@@ -40,15 +40,13 @@ Blocked::Blocked(
 	{
 		auto padding = st::changePhoneIconPadding;
 		padding.setBottom(padding.top());
-		_loading = base::make_unique_q<Ui::CenterWrap<>>(
+		_loading = base::make_unique_q<Ui::PaddingWrap<>>(
 			this,
-			object_ptr<Ui::PaddingWrap<>>(
+			object_ptr<Ui::FlatLabel>(
 				this,
-				object_ptr<Ui::FlatLabel>(
-					this,
-					tr::lng_contacts_loading(),
-					st::changePhoneDescription),
-				std::move(padding)));
+				tr::lng_contacts_loading(),
+				st::changePhoneDescription),
+			std::move(padding));
 		Ui::ResizeFitChild(
 			this,
 			_loading.get(),
@@ -56,13 +54,13 @@ Blocked::Blocked(
 	}
 
 	_controller->session().api().blockedPeers().slice(
-	) | rpl::start_with_next([=](const Api::BlockedPeers::Slice &slice) {
+	) | rpl::on_next([=](const Api::BlockedPeers::Slice &slice) {
 		checkTotal(slice.total);
 	}, lifetime());
 
 	_controller->session().changes().peerUpdates(
 		Data::PeerUpdate::Flag::IsBlocked
-	) | rpl::start_with_next([=](const Data::PeerUpdate &update) {
+	) | rpl::on_next([=](const Data::PeerUpdate &update) {
 		if (update.peer->isBlocked()) {
 			checkTotal(1);
 		}
@@ -73,7 +71,7 @@ rpl::producer<QString> Blocked::title() {
 	return tr::lng_settings_blocked_users();
 }
 
-QPointer<Ui::RpWidget> Blocked::createPinnedToTop(not_null<QWidget*> parent) {
+base::weak_qptr<Ui::RpWidget> Blocked::createPinnedToTop(not_null<QWidget*> parent) {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(parent.get());
 
 	Ui::AddSkip(content);
@@ -113,12 +111,12 @@ QPointer<Ui::RpWidget> Blocked::createPinnedToTop(not_null<QWidget*> parent) {
 		// Workaround.
 		std::move(
 			subtitleText
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			subtitle->entity()->resizeToWidth(content->width());
 		}, subtitle->lifetime());
 	}
 
-	return Ui::MakeWeak(not_null<Ui::RpWidget*>{ content });
+	return base::make_weak(not_null<Ui::RpWidget*>{ content });
 }
 
 void Blocked::setupContent() {
@@ -151,7 +149,7 @@ void Blocked::setupContent() {
 		state->controller->setDelegate(state->delegate.get());
 
 		state->controller->rowsCountChanges(
-		) | rpl::start_with_next([=](int total) {
+		) | rpl::on_next([=](int total) {
 			_countBlocked = total;
 			checkTotal(total);
 		}, content->lifetime());
@@ -172,36 +170,31 @@ void Blocked::setupContent() {
 			content,
 			{
 				.name = u"blocked_peers_empty"_q,
-				.sizeOverride = {
-					st::changePhoneIconSize,
-					st::changePhoneIconSize,
-				},
+				.sizeOverride = st::normalBoxLottieSize,
 			},
 			st::settingsBlockedListIconPadding);
 		content->add(std::move(icon.widget));
 
 		_showFinished.events(
-		) | rpl::start_with_next([animate = std::move(icon.animate)] {
+		) | rpl::on_next([animate = std::move(icon.animate)] {
 			animate(anim::repeat::once);
 		}, content->lifetime());
 
 		content->add(
-			object_ptr<Ui::CenterWrap<>>(
+			object_ptr<Ui::FlatLabel>(
 				content,
-				object_ptr<Ui::FlatLabel>(
-					content,
-					tr::lng_blocked_list_empty_title(),
-					st::changePhoneTitle)),
-			st::changePhoneTitlePadding);
+				tr::lng_blocked_list_empty_title(),
+				st::changePhoneTitle),
+			st::changePhoneTitlePadding,
+			style::al_top);
 
 		content->add(
-			object_ptr<Ui::CenterWrap<>>(
+			object_ptr<Ui::FlatLabel>(
 				content,
-				object_ptr<Ui::FlatLabel>(
-					content,
-					tr::lng_blocked_list_empty_description(),
-					st::changePhoneDescription)),
-			st::changePhoneDescriptionPadding);
+				tr::lng_blocked_list_empty_description(),
+				st::changePhoneDescription),
+			st::changePhoneDescriptionPadding,
+			style::al_top);
 
 		Ui::AddSkip(content, st::settingsBlockedListIconPadding.top());
 	}
@@ -211,14 +204,14 @@ void Blocked::setupContent() {
 //	Ui::ResizeFitChild(this, _container, st::settingsBlockedHeightMin);
 
 	widthValue(
-	) | rpl::start_with_next([=](int width) {
+	) | rpl::on_next([=](int width) {
 		_container->resizeToWidth(width);
 	}, _container->lifetime());
 
 	rpl::combine(
 		_container->heightValue(),
 		_emptinessChanges.events_starting_with(true)
-	) | rpl::start_with_next([=](int height, bool empty) {
+	) | rpl::on_next([=](int height, bool empty) {
 		const auto subtitled = !empty || (_countBlocked.current() > 0);
 		const auto total = st::settingsBlockedHeightMin;
 		const auto padding = st::defaultSubsectionTitlePadding

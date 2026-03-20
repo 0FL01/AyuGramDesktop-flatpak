@@ -8,10 +8,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_credits.h"
 
 #include "api/api_credits.h"
+#include "api/api_earn.h"
+#include "api/api_statistics.h"
 #include "base/call_delayed.h"
-#include "boxes/star_gift_box.h"
 #include "boxes/gift_credits_box.h"
 #include "boxes/gift_premium_box.h"
+#include "boxes/star_gift_box.h"
 #include "chat_helpers/stickers_gift_box_pack.h"
 #include "core/click_handler_types.h"
 #include "data/components/credits.h"
@@ -25,22 +27,25 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/channel_statistics/boosts/giveaway/boost_badge.h" // InfiniteRadialAnimationWidget.
 #include "info/channel_statistics/earn/earn_format.h"
 #include "info/channel_statistics/earn/earn_icons.h"
+#include "info/channel_statistics/earn/info_channel_earn_list.h"
+#include "info/info_memento.h"
 #include "info/settings/info_settings_widget.h" // SectionCustomTopBarData.
 #include "info/statistics/info_statistics_list_controllers.h"
-#include "info/info_memento.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "settings/settings_common_session.h"
 #include "settings/settings_credits_graphics.h"
 #include "statistics/widgets/chart_header_widget.h"
 #include "ui/boxes/boost_box.h" // Ui::StartFireworks.
+#include "ui/effects/animation_value_f.h"
 #include "ui/effects/credits_graphics.h"
 #include "ui/effects/premium_graphics.h"
 #include "ui/effects/premium_top_bar.h"
 #include "ui/layers/generic_box.h"
-#include "ui/text/format_values.h"
 #include "ui/painter.h"
 #include "ui/rect.h"
+#include "ui/text/custom_emoji_instance.h"
+#include "ui/text/format_values.h"
 #include "ui/text/text_utilities.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
@@ -48,6 +53,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/wrap/fade_wrap.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
+#include "ui/controls/swipe_handler.h"
+#include "ui/controls/swipe_handler_data.h"
 #include "window/window_session_controller.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_helpers.h"
@@ -60,6 +67,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_statistics.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_channel_earn.h"
+#include "styles/style_chat.h"
 
 namespace Settings {
 namespace {
@@ -73,7 +81,7 @@ public:
 
 	[[nodiscard]] rpl::producer<QString> title() override;
 
-	[[nodiscard]] QPointer<Ui::RpWidget> createPinnedToTop(
+	[[nodiscard]] base::weak_qptr<Ui::RpWidget> createPinnedToTop(
 		not_null<QWidget*> parent) override;
 
 	void showFinished() override;
@@ -86,6 +94,7 @@ public:
 
 private:
 	void setupContent();
+	void setupSwipeBack();
 	void setupHistory(not_null<Ui::VerticalLayout*> container);
 	void setupSubscriptions(not_null<Ui::VerticalLayout*> container);
 	const not_null<Window::SessionController*> _controller;
@@ -123,9 +132,10 @@ Credits::Credits(
 		: Ui::GenerateStars(st::creditsBalanceStarHeight, 1)) {
 	_controller->session().giftBoxStickersPacks().tonLoad();
 	setupContent();
+	setupSwipeBack();
 
 	_controller->session().premiumPossibleValue(
-	) | rpl::start_with_next([=](bool premiumPossible) {
+	) | rpl::on_next([=](bool premiumPossible) {
 		if (!premiumPossible) {
 			_showBack.fire({});
 		}
@@ -136,7 +146,7 @@ rpl::producer<QString> Credits::title() {
 	if (_creditsType == CreditsType::Ton) {
 		return tr::lng_credits_currency_summary_title();
 	}
-	return tr::lng_premium_summary_title();
+	return tr::lng_credits_summary_title();
 }
 
 bool Credits::hasFlexibleTopBar() const {
@@ -221,7 +231,7 @@ void Credits::setupSubscriptions(not_null<Ui::VerticalLayout*> container) {
 		const auto rebuilder = content->lifetime().make_state<RebuilderPtr>(
 			self->owner().createCreditsSubsRebuilder());
 		rebuilder->get()->events(
-		) | rpl::start_with_next([=](Data::CreditsStatusSlice slice) {
+		) | rpl::on_next([=](Data::CreditsStatusSlice slice) {
 			while (content->count()) {
 				delete content->widgetAt(0);
 			}
@@ -275,12 +285,12 @@ void Credits::setupHistory(not_null<Ui::VerticalLayout*> container) {
 		slider->toggle(!hasOneTab, anim::type::instant);
 		if (!hasOneTab) {
 			const auto shadow = Ui::CreateChild<Ui::RpWidget>(inner);
-			shadow->paintRequest() | rpl::start_with_next([=] {
+			shadow->paintRequest() | rpl::on_next([=] {
 				auto p = QPainter(shadow);
 				p.fillRect(shadow->rect(), st::shadowFg);
 			}, shadow->lifetime());
 			slider->geometryValue(
-			) | rpl::start_with_next([=](const QRect &r) {
+			) | rpl::on_next([=](const QRect &r) {
 				shadow->setGeometry(
 					inner->x(),
 					rect::bottom(slider) - st::lineWidth,
@@ -323,7 +333,7 @@ void Credits::setupHistory(not_null<Ui::VerticalLayout*> container) {
 
 		rpl::single(0) | rpl::then(
 			slider->entity()->sectionActivated()
-		) | rpl::start_with_next([=](int index) {
+		) | rpl::on_next([=](int index) {
 			if (index == 0) {
 				fullWrap->toggle(true, anim::type::instant);
 				inWrap->toggle(false, anim::type::instant);
@@ -393,7 +403,7 @@ void Credits::setupHistory(not_null<Ui::VerticalLayout*> container) {
 				apiOut->request({}, [=](Data::CreditsStatusSlice outSlice) {
 					::Api::PremiumPeerBot(
 						&_controller->session()
-					) | rpl::start_with_next([=](not_null<PeerData*> bot) {
+					) | rpl::on_next([=](not_null<PeerData*> bot) {
 						fill(bot, fullSlice, inSlice, outSlice);
 						apiLifetime->destroy();
 					}, *apiLifetime);
@@ -401,6 +411,46 @@ void Credits::setupHistory(not_null<Ui::VerticalLayout*> container) {
 			});
 		});
 	}
+}
+
+void Credits::setupSwipeBack() {
+	using namespace Ui::Controls;
+	
+	auto swipeBackData = lifetime().make_state<SwipeBackResult>();
+	
+	auto update = [=](SwipeContextData data) {
+		if (data.translation > 0) {
+			if (!swipeBackData->callback) {
+				(*swipeBackData) = SetupSwipeBack(
+					this,
+					[]() -> std::pair<QColor, QColor> {
+						return {
+							st::historyForwardChooseBg->c,
+							st::historyForwardChooseFg->c,
+						};
+					});
+			}
+			swipeBackData->callback(data);
+			return;
+		} else if (swipeBackData->lifetime) {
+			(*swipeBackData) = {};
+		}
+	};
+	
+	auto init = [=](int, Qt::LayoutDirection direction) {
+		return (direction == Qt::RightToLeft)
+			? DefaultSwipeBackHandlerFinishData([=] {
+				_showBack.fire({});
+			})
+			: SwipeHandlerFinishData();
+	};
+	
+	SetupSwipeHandler({
+		.widget = this,
+		.scroll = v::null,
+		.update = std::move(update),
+		.init = std::move(init),
+	});
 }
 
 void Credits::setupContent() {
@@ -419,13 +469,12 @@ void Credits::setupContent() {
 
 	{
 		const auto button = content->add(
-			object_ptr<Ui::CenterWrap<Ui::RoundButton>>(
+			object_ptr<Ui::RoundButton>(
 				content,
-				object_ptr<Ui::RoundButton>(
-					content,
-					nullptr,
-					st::creditsSettingsBigBalanceButton)),
-			st::boxRowPadding)->entity();
+				nullptr,
+				st::creditsSettingsBigBalanceButton),
+			st::boxRowPadding,
+			style::al_top);
 		button->setContext([&]() -> Ui::Text::MarkedContext {
 			auto customEmojiFactory = [=](const auto &...) {
 				const auto &icon = st::settingsIconAdd;
@@ -444,9 +493,9 @@ void Credits::setupContent() {
 					p.drawEllipse(r);
 					icon.paintInCenter(p, r, st::windowBgActive->c);
 				}
-				return std::make_unique<Ui::Text::StaticCustomEmoji>(
-					std::move(image),
-					u"topup_button"_q);
+				return std::make_unique<Ui::CustomEmoji::Internal>(
+					u"topup_button"_q,
+					std::move(image));
 			};
 			return { .customEmojiFactory = std::move(customEmojiFactory) };
 		}());
@@ -456,11 +505,11 @@ void Credits::setupContent() {
 				rpl::single(TextWithEntities()),
 				isCurrency
 					? tr::lng_credits_currency_summary_in_button(
-						Ui::Text::WithEntities)
+						tr::marked)
 					: tr::lng_credits_topup_button(
 						lt_emoji,
 						rpl::single(Ui::Text::SingleCustomEmoji(u"+"_q)),
-						Ui::Text::WithEntities)));
+						tr::marked)));
 		button->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 		const auto show = _controller->uiShow();
 		if (isCurrency) {
@@ -489,11 +538,11 @@ void Credits::setupContent() {
 		auto customEmojiFactory = [=](const auto &...) {
 			return std::make_unique<Ui::Text::ShiftedEmoji>(
 				isCurrency
-					? std::make_unique<Ui::Text::StaticCustomEmoji>(
+					? std::make_unique<Ui::CustomEmoji::Internal>(
+						u"currency_icon:%1"_q.arg(height),
 						Ui::Earn::IconCurrencyColored(
 							st::tonFieldIconSize,
-							st::currencyFg->c),
-						u"currency_icon:%1"_q.arg(height))
+							st::currencyFg->c))
 					: Ui::MakeCreditsIconEmoji(height, 1),
 				isCurrency
 					? QPoint(0, st::lineWidth * 2)
@@ -502,39 +551,37 @@ void Credits::setupContent() {
 		return { .customEmojiFactory = std::move(customEmojiFactory) };
 	}();
 	content->add(
-		object_ptr<Ui::CenterWrap<>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				tr::lng_credits_balance_me_count(
-					lt_emoji,
-					rpl::single(Ui::MakeCreditsIconEntity()),
-					lt_amount,
-					(isCurrency
-						? _controller->session().credits().tonBalanceValue()
-						: _controller->session().credits().balanceValue()
-					) | rpl::map(
-						Lang::FormatCreditsAmountDecimal
-					) | rpl::map(Ui::Text::Bold),
-					Ui::Text::WithEntities),
-				textSt,
-				st::defaultPopupMenu,
-				std::move(context))));
+			tr::lng_credits_balance_me_count(
+				lt_emoji,
+				rpl::single(Ui::MakeCreditsIconEntity()),
+				lt_amount,
+				(isCurrency
+					? _controller->session().credits().tonBalanceValue()
+					: _controller->session().credits().balanceValue()
+				) | rpl::map(
+					Lang::FormatCreditsAmountDecimal
+				) | rpl::map(tr::bold),
+				tr::marked),
+			textSt,
+			st::defaultPopupMenu,
+			std::move(context)),
+		style::al_top);
 	if (isCurrency) {
 		const auto rate = _controller->session().credits().usdRate();
 		const auto wrap = content->add(
 			object_ptr<Ui::SlideWrap<>>(
 				content,
-				object_ptr<Ui::CenterWrap<>>(
+				object_ptr<Ui::FlatLabel>(
 					content,
-					object_ptr<Ui::FlatLabel>(
-						content,
-						_controller->session().credits().tonBalanceValue(
-						) | rpl::map([=](CreditsAmount value) {
-							using namespace Info::ChannelEarn;
-							return value ? ToUsd(value, rate, 3) : QString();
-						}),
-						st::channelEarnOverviewSubMinorLabel))));
+					_controller->session().credits().tonBalanceValue(
+					) | rpl::map([=](CreditsAmount value) {
+						using namespace Info::ChannelEarn;
+						return value ? ToUsd(value, rate, 3) : QString();
+					}),
+					st::channelEarnOverviewSubMinorLabel)),
+			style::al_top);
 		wrap->toggleOn(_controller->session().credits().tonBalanceValue(
 			) | rpl::map(rpl::mappers::_1 > CreditsAmount(0)));
 		wrap->finishAnimating();
@@ -591,6 +638,136 @@ void Credits::setupContent() {
 			controller->showSection(Info::BotStarRef::Join::Make(self));
 		});
 	}
+	if (isCurrency) {
+		using namespace Info::ChannelEarn;
+		const auto fill = [=](
+				not_null<Ui::VerticalLayout*> container,
+				CreditsAmount value,
+				float64 multiplier) {
+			Ui::AddSkip(container);
+			Ui::AddSkip(container);
+
+			const auto labels = container->add(
+				object_ptr<Ui::RpWidget>(container),
+				style::al_top);
+
+			const auto majorLabel = Ui::CreateChild<Ui::FlatLabel>(
+				labels,
+				st::channelEarnBalanceMajorLabel);
+			{
+				const auto &m = st::channelEarnCurrencyCommonMargins;
+				const auto p = QMargins(
+					m.left(),
+					-m.top(),
+					m.right(),
+					m.bottom());
+				AddEmojiToMajor(majorLabel, rpl::single(value), {}, p);
+			}
+			majorLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+			const auto minorLabel = Ui::CreateChild<Ui::FlatLabel>(
+				labels,
+				MinorPart(value),
+				st::channelEarnBalanceMinorLabel);
+			minorLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+			rpl::combine(
+				majorLabel->sizeValue(),
+				minorLabel->sizeValue()
+			) | rpl::on_next([=](
+					const QSize &majorSize,
+					const QSize &minorSize) {
+				labels->resize(
+					majorSize.width() + minorSize.width(),
+					majorSize.height());
+				labels->setNaturalWidth(
+					majorSize.width() + minorSize.width());
+				majorLabel->moveToLeft(0, 0);
+				minorLabel->moveToRight(
+					0,
+					st::channelEarnBalanceMinorLabelSkip);
+			}, labels->lifetime());
+			Ui::ToggleChildrenVisibility(labels, true);
+
+			Ui::AddSkip(container);
+			container->add(
+				object_ptr<Ui::FlatLabel>(
+					container,
+					ToUsd(value, multiplier, 0),
+					st::channelEarnOverviewSubMinorLabel),
+				style::al_top);
+
+			Ui::AddSkip(container);
+
+			const auto &stButton = st::creditsSettingsBigBalanceButton;
+			const auto button = container->add(
+				object_ptr<Ui::RoundButton>(
+					container,
+					rpl::never<QString>(),
+					stButton),
+				st::boxRowPadding,
+				style::al_top);
+
+			const auto label = Ui::CreateChild<Ui::FlatLabel>(
+				button,
+				tr::lng_channel_earn_balance_button(tr::now),
+				st::channelEarnSemiboldLabel);
+			label->setTextColorOverride(stButton.textFg->c);
+			label->setAttribute(Qt::WA_TransparentForMouseEvents);
+			rpl::combine(
+				button->sizeValue(),
+				label->sizeValue()
+			) | rpl::on_next([=](const QSize &b, const QSize &l) {
+				label->moveToLeft(
+					(b.width() - l.width()) / 2,
+					(b.height() - l.height()) / 2);
+			}, label->lifetime());
+
+			const auto colorText = [=](float64 value) {
+				label->setTextColorOverride(
+					anim::with_alpha(
+						stButton.textFg->c,
+						anim::interpolateF(.5, 1., value)));
+			};
+			const auto withdrawalEnabled = true;
+			colorText(withdrawalEnabled ? 1. : 0.);
+			button->setAttribute(
+				Qt::WA_TransparentForMouseEvents,
+				!withdrawalEnabled);
+
+			Api::HandleWithdrawalButton(
+				{ .currencyReceiver = self },
+				button,
+				_controller->uiShow());
+			Ui::ToggleChildrenVisibility(button, true);
+
+			Ui::AddSkip(container);
+			Ui::AddSkip(container);
+			Ui::AddSkip(container);
+			Ui::AddDividerText(
+				container,
+				tr::lng_credits_currency_summary_subtitle());
+			Ui::AddSkip(container);
+		};
+
+		const auto self = _controller->session().user();
+		const auto wrap = content->add(
+			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+				content,
+				object_ptr<Ui::VerticalLayout>(content)));
+		const auto apiLifetime = wrap->lifetime().make_state<rpl::lifetime>();
+		const auto api = apiLifetime->make_state<Api::EarnStatistics>(self);
+		wrap->toggle(false, anim::type::instant);
+		api->request() | rpl::on_error_done([] {
+		}, [=] {
+			if (!api->data().availableBalance.empty()) {
+				wrap->toggle(true, anim::type::normal);
+				fill(
+					wrap->entity(),
+					api->data().availableBalance,
+					api->data().usdRate);
+				content->resizeToWidth(content->width());
+			}
+		}, *apiLifetime);
+	}
 
 	if (!isCurrency) {
 		Ui::AddSkip(content, st::lineWidth * 4);
@@ -603,7 +780,7 @@ void Credits::setupContent() {
 	Ui::ResizeFitChild(this, content);
 }
 
-QPointer<Ui::RpWidget> Credits::createPinnedToTop(
+base::weak_qptr<Ui::RpWidget> Credits::createPinnedToTop(
 		not_null<QWidget*> parent) {
 	_parent = parent;
 	const auto isCurrency = _creditsType == CreditsType::Ton;
@@ -636,7 +813,7 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 	};
 
 	_wrap.value(
-	) | rpl::start_with_next([=](Info::Wrap wrap) {
+	) | rpl::on_next([=](Info::Wrap wrap) {
 		content->setRoundEdges(wrap == Info::Wrap::Layer);
 	}, content->lifetime());
 
@@ -645,7 +822,7 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 
 	content->resize(content->width(), content->maximumHeight());
 	content->additionalHeight(
-	) | rpl::start_with_next([=](int additionalHeight) {
+	) | rpl::on_next([=](int additionalHeight) {
 		const auto wasMax = (content->height() == content->maximumHeight());
 		content->setMaximumHeight(st::settingsPremiumTopHeight
 			+ additionalHeight);
@@ -671,7 +848,7 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 		rpl::combine(
 			balance->sizeValue(),
 			content->sizeValue()
-		) | rpl::start_with_next([=](const QSize &, const QSize &) {
+		) | rpl::on_next([=](const QSize &, const QSize &) {
 			balance->moveToRight(
 				(_close
 					? _close->width() + st::creditsHistoryRightSkip
@@ -682,7 +859,7 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 	}
 
 	_wrap.value(
-	) | rpl::start_with_next([=](Info::Wrap wrap) {
+	) | rpl::on_next([=](Info::Wrap wrap) {
 		const auto isLayer = (wrap == Info::Wrap::Layer);
 		_back = base::make_unique_q<Ui::FadeWrap<Ui::IconButton>>(
 			content,
@@ -692,13 +869,13 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 			st::infoTopBarScale);
 		_back->setDuration(0);
 		_back->toggleOn(isLayer
-			? _backToggles.value() | rpl::type_erased()
+			? _backToggles.value() | rpl::type_erased
 			: rpl::single(true));
 		_back->entity()->addClickHandler([=] {
 			_showBack.fire({});
 		});
 		_back->toggledValue(
-		) | rpl::start_with_next([=](bool toggled) {
+		) | rpl::on_next([=](bool toggled) {
 			const auto &st = isLayer ? st::infoLayerTopBar : st::infoTopBar;
 			content->setTextPosition(
 				toggled ? st.back.width : st.titlePosition.x(),
@@ -716,13 +893,13 @@ QPointer<Ui::RpWidget> Credits::createPinnedToTop(
 				_controller->parentController()->hideSpecialLayer();
 			});
 			content->widthValue(
-			) | rpl::start_with_next([=] {
+			) | rpl::on_next([=] {
 				_close->moveToRight(0, 0);
 			}, _close->lifetime());
 		}
 	}, content->lifetime());
 
-	return Ui::MakeWeak(not_null<Ui::RpWidget*>{ content });
+	return base::make_weak(not_null<Ui::RpWidget*>{ content });
 }
 
 void Credits::showFinished() {
@@ -799,26 +976,19 @@ Fn<void()> BuyStarsHandler::handler(
 			? _api->options()
 			: Data::CreditTopupOptions();
 		const auto amount = CreditsAmount();
-		const auto weak = Ui::MakeWeak(box);
+		const auto weak = base::make_weak(box);
 		FillCreditOptions(show, inner, self, amount, [=] {
-			if (const auto strong = weak.data()) {
+			if (const auto strong = weak.get()) {
 				strong->closeBox();
 			}
 			if (const auto onstack = paid) {
 				onstack();
 			}
-		}, nullptr, options);
+		}, box->showFinishes(), nullptr, options);
 
-		const auto button = box->addButton(tr::lng_close(), [=] {
+		box->addButton(tr::lng_close(), [=] {
 			box->closeBox();
 		});
-		const auto buttonWidth = st::boxWideWidth
-			- rect::m::sum::h(st::giveawayGiftCodeBox.buttonPadding);
-		button->widthValue() | rpl::filter([=] {
-			return (button->widthNoMargins() != buttonWidth);
-		}) | rpl::start_with_next([=] {
-			button->resizeToWidth(buttonWidth);
-		}, button->lifetime());
 	};
 	return crl::guard(this, [=] {
 		if (_api && !_api->options().empty()) {
@@ -829,7 +999,7 @@ Fn<void()> BuyStarsHandler::handler(
 			const auto user = show->session().user();
 			_api = std::make_unique<Api::CreditsTopupOptions>(user);
 			_api->request(
-			) | rpl::start_with_error_done([=](const QString &error) {
+			) | rpl::on_error_done([=](const QString &error) {
 				_loading = false;
 				show->showToast(error);
 			}, [=] {

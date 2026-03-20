@@ -45,5 +45,5 @@ void sendVoiceSync(not_null<Main::Session*> session,
 				   const QByteArray &data,
 				   int64_t duration,
 				   bool video,
-				   const Api::SendAction &action);
+				   Api::MessageToSend &&message);
 }

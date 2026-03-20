@@ -7,7 +7,7 @@
 #include "theme_selector_box.h"
 
 #include "lang_auto.h"
-#include "ayu/features/messageshot/message_shot.h"
+#include "ayu/features/message_shot/message_shot.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
 #include "data/data_file_origin.h"
@@ -85,7 +85,7 @@ void ThemeSelectorBox::setupContent() {
 		title->topValue(),
 		inner->widthValue(),
 		showAll->widthValue()
-	) | rpl::start_with_next([=](int top, int outerWidth, int width)
+	) | rpl::on_next([=](int top, int outerWidth, int width)
 							 {
 								 showAll->moveToRight(
 									 st::defaultSubsectionTitlePadding.left(),
@@ -108,7 +108,7 @@ void ThemeSelectorBox::setupContent() {
 			0));
 
 	list->allShown(
-	) | rpl::start_with_next([=](bool shown)
+	) | rpl::on_next([=](bool shown)
 							 {
 								 showAll->setVisible(!shown);
 							 },
@@ -124,7 +124,7 @@ void ThemeSelectorBox::setupContent() {
 	_controller->session().data().cloudThemes().refresh();
 
 	AyuFeatures::MessageShot::themeChosen(
-	) | rpl::start_with_next(
+	) | rpl::on_next(
 		[=](Data::CloudTheme theme)
 		{
 			const auto document = _controller->session().data().document(theme.documentId);
@@ -155,7 +155,7 @@ void ThemeSelectorBox::setupContent() {
 					[=]
 					{
 						return documentView->loaded();
-					}) | rpl::start_with_next(
+					}) | rpl::on_next(
 					[=]
 					{
 						innerCallback();
@@ -166,7 +166,7 @@ void ThemeSelectorBox::setupContent() {
 		lifetime());
 
 	AyuFeatures::MessageShot::paletteChosen(
-	) | rpl::start_with_next([=](const auto &palette)
+	) | rpl::on_next([=](const auto &palette)
 							 {
 								 _themeNames.fire(tr::ayu_MessageShotThemeDefault(tr::now));
 								 _selectedPalette = palette;

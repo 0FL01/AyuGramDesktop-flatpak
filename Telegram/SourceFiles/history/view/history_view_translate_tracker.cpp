@@ -23,6 +23,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "spellcheck/platform/platform_language.h"
 
+// AyuGram includes
+#include "ayu/features/translator/ayu_translator.h"
+
+
 namespace HistoryView {
 namespace {
 
@@ -55,19 +59,15 @@ void TranslateTracker::setup() {
 
 	const auto channel = peer->asChannel();
 	auto autoTranslationValue = (channel
-		? (channel->flagsValue() | rpl::type_erased())
+		? (channel->flagsValue() | rpl::type_erased)
 		: rpl::single(Data::Flags<ChannelDataFlags>::Change({}, {}))
 		) | rpl::map([=](Data::Flags<ChannelDataFlags>::Change data) {
 		return (data.value & ChannelDataFlag::AutoTranslation);
 	}) | rpl::distinct_until_changed();
 
 	using namespace rpl::mappers;
-	_trackingLanguage = rpl::combine(
-		Core::App().settings().translateChatEnabledValue(),
-		Data::AmPremiumValue(&_history->session()),
-		std::move(autoTranslationValue),
-		_1 && (_2 || _3));
-	_trackingLanguage.value() | rpl::start_with_next([=](bool tracking) {
+	_trackingLanguage = Core::App().settings().translateChatEnabledValue();
+	_trackingLanguage.value() | rpl::on_next([=](bool tracking) {
 		_trackingLifetime.destroy();
 		if (tracking) {
 			recognizeCollected();
@@ -240,7 +240,7 @@ void TranslateTracker::cancelSentRequest() {
 				item->translationShowRequiresRequest({});
 			}
 		}
-		_history->session().api().request(base::take(_requestId)).cancel();
+		Ayu::Translator::TranslateManager::currentInstance()->cancel(_requestId);
 	}
 }
 
@@ -277,13 +277,14 @@ void TranslateTracker::requestSome() {
 		}
 	}
 	using Flag = MTPmessages_TranslateText::Flag;
-	_requestId = session->api().request(MTPmessages_TranslateText(
+	_requestId = Ayu::Translator::TranslateManager::currentInstance()->request(
+		&peer->session(),
 		MTP_flags(Flag::f_peer | Flag::f_id),
-		peer->input,
+		peer->input(),
 		MTP_vector<MTPint>(list),
 		MTPVector<MTPTextWithEntities>(),
 		MTP_string(to.twoLetterCode())
-	)).done([=](const MTPmessages_TranslatedText &result) {
+	).done([=](const MTPmessages_TranslatedText &result) {
 		requestDone(to, result.data().vresult().v);
 	}).fail([=] {
 		requestDone(to, {});
@@ -354,7 +355,7 @@ void TranslateTracker::recognizeCollected() {
 
 void TranslateTracker::trackSkipLanguages() {
 	Core::App().settings().skipTranslationLanguagesValue(
-	) | rpl::start_with_next([=](const std::vector<LanguageId> &skip) {
+	) | rpl::on_next([=](const std::vector<LanguageId> &skip) {
 		checkRecognized(skip);
 	}, _trackingLifetime);
 }

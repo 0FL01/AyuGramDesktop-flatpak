@@ -23,6 +23,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QStandardPaths>
 #include <QtCore/QTimer>
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+
+
 namespace {
 
 constexpr auto kDefaultProxyPort = 80;
@@ -273,11 +277,11 @@ LastCrashedWindow::LastCrashedWindow(
 	excludeReportUsername();
 
 #ifndef TDESKTOP_DISABLE_AUTOUPDATE
-	if (false) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.crashReporting) {
 #else
 	if (true) {
 #endif
-		// Currently accept crash reports only from testers.
 		_sendingState = SendingNoReport;
 	} else if (Core::OpenGLLastCheckFailed()) {
 		// Nothing we can do right now with graphics driver crashes in GL.
@@ -366,21 +370,21 @@ LastCrashedWindow::LastCrashedWindow(
 		Core::UpdateChecker checker;
 		using Progress = Core::UpdateChecker::Progress;
 		checker.checking(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			Assert(_updaterData != nullptr);
 
 			setUpdatingState(UpdatingCheck);
 		}, _lifetime);
 
 		checker.isLatest(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			Assert(_updaterData != nullptr);
 
 			setUpdatingState(UpdatingLatest);
 		}, _lifetime);
 
 		checker.progress(
-		) | rpl::start_with_next([=](const Progress &result) {
+		) | rpl::on_next([=](const Progress &result) {
 			Assert(_updaterData != nullptr);
 
 			setUpdatingState(UpdatingDownload);
@@ -388,14 +392,14 @@ LastCrashedWindow::LastCrashedWindow(
 		}, _lifetime);
 
 		checker.failed(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			Assert(_updaterData != nullptr);
 
 			setUpdatingState(UpdatingFail);
 		}, _lifetime);
 
 		checker.ready(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			Assert(_updaterData != nullptr);
 
 			setUpdatingState(UpdatingReady);
@@ -429,6 +433,9 @@ LastCrashedWindow::LastCrashedWindow(
 	_yourReportName.setTextInteractionFlags(Qt::TextSelectableByMouse);
 
 	_includeUsername.setText(u"Include username @%1 as your contact info"_q.arg(_reportUsername));
+	_includeUsername.setCheckState(Qt::Unchecked);
+	_includeUsername.setDisabled(true);
+	_includeUsername.setVisible(false);
 
 	_report.setPlainText(_reportTextNoUsername);
 
@@ -855,7 +862,7 @@ void LastCrashedWindow::networkSettings() {
 		proxy.user,
 		proxy.password);
 	box->saveRequests(
-	) | rpl::start_with_next([=](MTP::ProxyData &&data) {
+	) | rpl::on_next([=](MTP::ProxyData &&data) {
 		Assert(data.host.isEmpty() || data.port != 0);
 		_proxyChanges.fire(std::move(data));
 		proxyUpdated();

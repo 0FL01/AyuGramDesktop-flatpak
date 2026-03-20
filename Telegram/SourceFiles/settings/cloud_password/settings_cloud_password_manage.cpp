@@ -53,7 +53,7 @@ public:
 	[[nodiscard]] rpl::producer<QString> title() override;
 	void setupContent();
 
-	[[nodiscard]] QPointer<Ui::RpWidget> createPinnedToBottom(
+	[[nodiscard]] base::weak_qptr<Ui::RpWidget> createPinnedToBottom(
 		not_null<Ui::RpWidget*> parent) override;
 
 protected:
@@ -110,7 +110,7 @@ void Manage::setupContent() {
 		return;
 	}
 	cloudPassword().state(
-	) | rpl::start_with_next([=](const Core::CloudPasswordState &state) {
+	) | rpl::on_next([=](const Core::CloudPasswordState &state) {
 		if (!_requestLifetime && !state.hasPassword) {
 			quit();
 		}
@@ -172,19 +172,19 @@ void Manage::setupContent() {
 	rpl::combine(
 		about->geometryValue(),
 		content->widthValue()
-	) | rpl::start_with_next([=](QRect r, int w) {
+	) | rpl::on_next([=](QRect r, int w) {
 		r.setWidth(w);
 		divider->setGeometry(r);
 	}, divider->lifetime());
 	_isBottomFillerShown.value(
-	) | rpl::start_with_next([=](bool shown) {
+	) | rpl::on_next([=](bool shown) {
 		divider->skipEdge(Qt::BottomEdge, shown);
 	}, divider->lifetime());
 
 	Ui::ResizeFitChild(this, content);
 }
 
-QPointer<Ui::RpWidget> Manage::createPinnedToBottom(
+base::weak_qptr<Ui::RpWidget> Manage::createPinnedToBottom(
 		not_null<Ui::RpWidget*> parent) {
 
 	const auto disable = [=](Fn<void()> close) {
@@ -197,7 +197,7 @@ QPointer<Ui::RpWidget> Manage::createPinnedToBottom(
 			QString(),
 			false,
 			QString()
-		) | rpl::start_with_error_done([=](const QString &type) {
+		) | rpl::on_error_done([=](const QString &type) {
 			AbstractStep::isPasswordInvalidError(type);
 		}, [=] {
 			setStepData(StepData());

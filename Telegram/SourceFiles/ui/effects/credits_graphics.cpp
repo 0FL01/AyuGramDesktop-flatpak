@@ -26,8 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "ui/rect.h"
+#include "ui/text/custom_emoji_instance.h"
 #include "ui/text/format_values.h"
-#include "ui/text/text_custom_emoji.h"
 #include "ui/text/text_utilities.h"
 #include "ui/widgets/fields/number_input.h"
 #include "ui/wrap/padding_wrap.h"
@@ -156,7 +156,7 @@ not_null<RpWidget*> CreateSingleStarWidget(
 	const auto image = GenerateStars(height, 1);
 	widget->resize(image.size() / style::DevicePixelRatio());
 	widget->paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		auto p = QPainter(widget);
 		p.drawImage(0, 0, image);
 	}, widget->lifetime());
@@ -184,7 +184,7 @@ not_null<MaskedInputField*> AddInputFieldForCredits(
 		currentValue.current().whole());
 	rpl::duplicate(
 		value
-	) | rpl::start_with_next([=](CreditsAmount v) {
+	) | rpl::on_next([=](CreditsAmount v) {
 		input->changeLimit(v.whole());
 		input->setText(QString::number(v.whole()));
 	}, input->lifetime());
@@ -192,7 +192,7 @@ not_null<MaskedInputField*> AddInputFieldForCredits(
 		inputContainer,
 		st.style.font->height);
 	inputContainer->sizeValue(
-	) | rpl::start_with_next([=](const QSize &size) {
+	) | rpl::on_next([=](const QSize &size) {
 		input->resize(
 			size.width() - rect::m::sum::h(st::boxRowPadding),
 			st.heightMin);
@@ -223,6 +223,12 @@ PaintRoundImageCallback GenerateCreditsPaintUserpicCallback(
 		};
 	}
 	const auto bg = [&]() -> EmptyUserpic::BgColors {
+		if (entry.postsSearch) {
+			return {
+				st::historyPeerSavedMessagesBg,
+				st::historyPeerSavedMessagesBg2,
+			};
+		}
 		switch (entry.peerType) {
 		case Data::CreditsHistoryEntry::PeerType::API:
 			return { st::historyPeer2UserpicBg, st::historyPeer2UserpicBg2 };
@@ -306,7 +312,9 @@ PaintRoundImageCallback GenerateCreditsPaintUserpicCallback(
 	return [=](Painter &p, int x, int y, int outerWidth, int size) mutable {
 		userpic->paintCircle(p, x, y, outerWidth, size);
 		const auto rect = QRect(x, y, size, size);
-		((entry.peerType == PeerType::AppStore)
+		(entry.postsSearch
+			? st::creditsHistorySearchPostsIcon
+			: (entry.peerType == PeerType::AppStore)
 			? st::sessionIconiPhone
 			: (entry.peerType == PeerType::PlayMarket)
 			? st::sessionIconAndroid
@@ -333,8 +341,8 @@ PaintRoundImageCallback GenerateCreditsPaintEntryCallback(
 	photo->load(Data::PhotoSize::Large, {});
 
 	rpl::single(rpl::empty_value()) | rpl::then(
-		photo->owner().session().downloaderTaskFinished()
-	) | rpl::start_with_next([=] {
+		photo->session().downloaderTaskFinished()
+	) | rpl::on_next([=] {
 		using Size = Data::PhotoSize;
 		if (const auto large = state->view->image(Size::Large)) {
 			state->imagePtr = large;
@@ -383,8 +391,8 @@ PaintRoundImageCallback GenerateCreditsPaintEntryCallback(
 	video->loadThumbnail({});
 
 	rpl::single(rpl::empty_value()) | rpl::then(
-		video->owner().session().downloaderTaskFinished()
-	) | rpl::start_with_next([=] {
+		video->session().downloaderTaskFinished()
+	) | rpl::on_next([=] {
 		if (const auto thumbnail = state->view->thumbnail()) {
 			state->imagePtr = thumbnail;
 		}
@@ -561,6 +569,10 @@ TextWithEntities GenerateEntryName(const Data::CreditsHistoryEntry &entry) {
 				Info::BotStarRef::FormatCommission(entry.starrefCommission)
 			},
 			TextWithEntities::Simple)
+		: entry.isLiveStoryReaction()
+		? tr::lng_credits_paid_messages_fee_live_reaction(
+			tr::now,
+			TextWithEntities::Simple)
 		: entry.paidMessagesCount
 		? tr::lng_credits_paid_messages_fee(
 			tr::now,
@@ -692,9 +704,9 @@ QImage CreditsWhiteDoubledIcon(int size, float64 outlineRatio) {
 std::unique_ptr<Ui::Text::CustomEmoji> MakeCreditsIconEmoji(
 		int height,
 		int count) {
-	return std::make_unique<Ui::Text::StaticCustomEmoji>(
-		GenerateStars(height, count),
-		u"credits_icon:%1:%2"_q.arg(height).arg(count));
+	return std::make_unique<Ui::CustomEmoji::Internal>(
+		u"credits_icon:%1:%2"_q.arg(height).arg(count),
+		GenerateStars(height, count));
 }
 
 Ui::Text::MarkedContext MakeCreditsIconContext(int height, int count) {

@@ -882,11 +882,10 @@ void CreditsRow::init() {
 	const auto name = !isSpecial
 		? PeerListRow::generateName()
 		: Ui::GenerateEntryName(_entry).text;
-	_name = _entry.paidMessagesCount
-		? tr::lng_credits_paid_messages_fee(
-			tr::now,
-			lt_count,
-			_entry.paidMessagesCount)
+	_name = (_entry.isLiveStoryReaction() || _entry.paidMessagesCount)
+		? name
+		: _entry.postsSearch
+		? tr::lng_credits_box_history_entry_posts_search(tr::now)
 		: ((!_entry.subscriptionUntil.isNull() && !isSpecial)
 			|| (_entry.giftUpgraded && !isSpecial)
 			|| (_entry.giftResale && !isSpecial)
@@ -899,8 +898,13 @@ void CreditsRow::init() {
 			tr::now,
 			lt_count_decimal,
 			_entry.floodSkip)
+		: _entry.isLiveStoryReaction()
+		? tr::lng_credits_paid_messages_fee_live_reaction(tr::now)
 		: _entry.paidMessagesCount
-		? name
+		? tr::lng_credits_paid_messages_fee(
+			tr::now,
+			lt_count,
+			_entry.paidMessagesCount)
 		: (!_entry.subscriptionUntil.isNull() && !_entry.title.isEmpty())
 		? _entry.title
 		: _entry.refunded
@@ -997,14 +1001,9 @@ void CreditsRow::init() {
 		}
 	}
 	if (!_paintUserpicCallback) {
-		_paintUserpicCallback = /*_entry.stargift
-			? Ui::GenerateGiftStickerUserpicCallback(
-				_session,
-				_entry.bareGiftStickerId,
-				_context.repaint)
-			: */!isSpecial
-			? PeerListRow::generatePaintUserpicCallback(false)
-			: Ui::GenerateCreditsPaintUserpicCallback(_entry);
+		_paintUserpicCallback = (isSpecial || _entry.postsSearch)
+			? Ui::GenerateCreditsPaintUserpicCallback(_entry)
+			: PeerListRow::generatePaintUserpicCallback(false);
 	}
 }
 
@@ -1215,13 +1214,13 @@ CreditsController::CreditsController(CreditsDescriptor d)
 		if (data.startsWith(u"ton"_q)) {
 			const auto in = data.split(u":"_q)[1].startsWith(u"in"_q);
 			return std::make_unique<Ui::Text::ShiftedEmoji>(
-				std::make_unique<Ui::Text::StaticCustomEmoji>(
+				std::make_unique<Ui::CustomEmoji::Internal>(
+					data.toString(),
 					Ui::Earn::IconCurrencyColored(
 						st::tonFieldIconSize,
 						in
 							? st::boxTextFgGood->c
-							: st::menuIconAttentionColor->c),
-					data.toString()),
+							: st::menuIconAttentionColor->c)),
 				QPoint(0, st::lineWidth));
 		}
 		const auto desc = DeserializeCreditsRowDescriptionData(

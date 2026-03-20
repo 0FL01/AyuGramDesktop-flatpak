@@ -30,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/widgets/labels.h"
+#include "ui/rect.h"
 #include "ui/wrap/slide_wrap.h"
 #include "styles/style_layers.h"
 #include "styles/style_boxes.h"
@@ -106,7 +107,7 @@ void DeleteMessagesBox::prepare() {
 					lt_date,
 					TextWithEntities{
 						langDayOfMonthFull(_wipeHistoryFirstToDelete) },
-					Ui::Text::RichLangValue)
+					tr::rich)
 				: tr::lng_sure_delete_by_date_many(
 					tr::now,
 					lt_days,
@@ -115,20 +116,17 @@ void DeleteMessagesBox::prepare() {
 						lt_count,
 						_wipeHistoryFirstToDelete.daysTo(
 							_wipeHistoryLastToDelete) + 1,
-						Ui::Text::WithEntities),
-					Ui::Text::RichLangValue);
+						tr::marked),
+					tr::rich);
 			deleteStyle = &st::attentionBoxButton;
 		} else if (_wipeHistoryJustClear) {
-			const auto isChannel = peer->isBroadcast();
-			const auto isPublicGroup = peer->isMegagroup()
-				&& peer->asChannel()->isPublic();
-			if (isChannel || isPublicGroup) {
-				canDelete = false;
-			}
+			const auto isChannel = peer->isChannel() && !peer->isMegagroup();
+			_revokeJustClearForChannel = isChannel;
 			details.text = isChannel
-				? tr::lng_no_clear_history_channel(tr::now)
-				: isPublicGroup
-				? tr::lng_no_clear_history_group(tr::now)
+				? tr::lng_sure_delete_channel_history(
+					tr::now,
+					lt_channel,
+					peer->name())
 				: peer->isSelf()
 				? tr::lng_sure_delete_saved_messages(tr::now)
 				: peer->isUser()
@@ -140,7 +138,7 @@ void DeleteMessagesBox::prepare() {
 					tr::now,
 					lt_group,
 					peer->name());
-			details = Ui::Text::RichLangValue(details.text);
+			details = tr::rich(details.text);
 			deleteStyle = &st::attentionBoxButton;
 		} else {
 			details.text = peer->isSelf()
@@ -158,13 +156,14 @@ void DeleteMessagesBox::prepare() {
 				: peer->isMegagroup()
 				? tr::lng_sure_leave_group(tr::now)
 				: tr::lng_sure_leave_channel(tr::now);
-			details = Ui::Text::RichLangValue(details.text);
+			details = tr::rich(details.text);
 			if (!peer->isUser()) {
 				*deleteText = tr::lng_box_leave();
 			}
 			deleteStyle = &st::attentionBoxButton;
 		}
-		if (auto revoke = revokeText(peer)) {
+		if (_revokeJustClearForChannel) {
+		} else if (auto revoke = revokeText(peer)) {
 			_revoke.create(
 				this,
 				revoke->checkbox,
@@ -173,7 +172,7 @@ void DeleteMessagesBox::prepare() {
 			appendDetails(std::move(revoke->description));
 			if (!peer->isUser() && !_wipeHistoryJustClear) {
 				_revoke->checkedValue(
-				) | rpl::start_with_next([=](bool revokeForAll) {
+				) | rpl::on_next([=](bool revokeForAll) {
 					*deleteText = revokeForAll
 						? tr::lng_box_delete()
 						: tr::lng_box_leave();
@@ -210,8 +209,8 @@ void DeleteMessagesBox::prepare() {
 				tr::lng_delete_all_from_user(
 					tr::now,
 					lt_user,
-					Ui::Text::Bold(_moderateFrom->name()),
-					Ui::Text::WithEntities),
+					tr::bold(_moderateFrom->name()),
+					tr::marked),
 				false,
 				st::defaultBoxCheckbox);
 
@@ -234,12 +233,14 @@ void DeleteMessagesBox::prepare() {
 			search->searchMessages({ .from = _moderateFrom });
 		}
 	} else {
-		details.text = (_ids.size() == 1)
+		details.text = hasSavedMusicMessages()
+			? tr::lng_selected_remove_saved_music(tr::now)
+			: (_ids.size() == 1)
 			? tr::lng_selected_delete_sure_this(tr::now)
 			: tr::lng_selected_delete_sure(tr::now, lt_count, _ids.size());
 		if (const auto peer = checkFromSinglePeer()) {
 			auto count = int(_ids.size());
-			if (hasScheduledMessages()) {
+			if (hasScheduledMessages() || hasSavedMusicMessages()) {
 			} else if (auto revoke = revokeText(peer)) {
 				const auto &settings = Core::App().settings();
 				const auto revokeByDefault
@@ -258,13 +259,13 @@ void DeleteMessagesBox::prepare() {
 						st::defaultBoxCheckbox));
 				_revokeRemember->hide(anim::type::instant);
 				_revoke->checkedValue(
-				) | rpl::start_with_next([=](bool checked) {
+				) | rpl::on_next([=](bool checked) {
 					_revokeRemember->toggle(
 						checked != revokeByDefault,
 						anim::type::normal);
 				}, _revokeRemember->lifetime());
 				_revokeRemember->heightValue(
-				) | rpl::start_with_next([=](int h) {
+				) | rpl::on_next([=](int h) {
 					setDimensions(st::boxWidth, _fullHeight + h);
 				}, lifetime());
 				appendDetails(std::move(revoke->description));
@@ -293,6 +294,7 @@ void DeleteMessagesBox::prepare() {
 		}
 	}
 	_text.create(this, rpl::single(std::move(details)), st::boxLabel);
+	_text->resizeToWidth(st::boxWidth - rect::m::sum::h(st::boxPadding));
 
 	if (_wipeHistoryJustClear && _wipeHistoryPeer) {
 		const auto validator = TTLMenu::TTLValidator(
@@ -322,34 +324,53 @@ void DeleteMessagesBox::prepare() {
 		addButton(tr::lng_about_done(), [=] { closeBox(); });
 	}
 
-	auto fullHeight = st::boxPadding.top()
-		+ _text->height()
-		+ st::boxPadding.bottom();
-	if (_moderateFrom) {
-		fullHeight += st::boxMediumSkip;
-		if (_banUser) {
-			fullHeight += _banUser->heightNoMargins() + st::boxLittleSkip;
+	const auto &padding = st::boxPadding;
+	rpl::combine(
+		widthValue(),
+		_text->naturalWidthValue()
+	) | rpl::on_next([=](int full, int) {
+		_text->resizeToNaturalWidth(full - padding.left() - padding.right());
+
+		auto fullHeight = st::boxPadding.top()
+			+ _text->height()
+			+ st::boxPadding.bottom();
+		if (_moderateFrom) {
+			fullHeight += st::boxMediumSkip;
+			if (_banUser) {
+				fullHeight += _banUser->heightNoMargins() + st::boxLittleSkip;
+			}
+			fullHeight += _reportSpam->heightNoMargins();
+			if (_deleteAll) {
+				fullHeight += st::boxLittleSkip + _deleteAll->heightNoMargins();
+			}
+		} else if (_revoke) {
+			fullHeight += st::boxMediumSkip + _revoke->heightNoMargins();
 		}
-		fullHeight += _reportSpam->heightNoMargins();
-		if (_deleteAll) {
-			fullHeight += st::boxLittleSkip + _deleteAll->heightNoMargins();
+		if (_autoDeleteSettings) {
+			fullHeight += st::boxMediumSkip
+				+ _autoDeleteSettings->height()
+				+ st::boxLittleSkip;
 		}
-	} else if (_revoke) {
-		fullHeight += st::boxMediumSkip + _revoke->heightNoMargins();
-	}
-	if (_autoDeleteSettings) {
-		fullHeight += st::boxMediumSkip
-			+ _autoDeleteSettings->height()
-			+ st::boxLittleSkip;
-	}
-	setDimensions(st::boxWidth, fullHeight);
-	_fullHeight = fullHeight;
+		setDimensions(st::boxWidth, fullHeight);
+		_fullHeight = fullHeight;
+	}, lifetime());
 }
 
 bool DeleteMessagesBox::hasScheduledMessages() const {
 	for (const auto &fullId : _ids) {
 		if (const auto item = _session->data().message(fullId)) {
 			if (item->isScheduled()) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool DeleteMessagesBox::hasSavedMusicMessages() const {
+	for (const auto &fullId : _ids) {
+		if (const auto item = _session->data().message(fullId)) {
+			if (item->isSavedMusicItem()) {
 				return true;
 			}
 		}
@@ -383,7 +404,7 @@ auto DeleteMessagesBox::revokeText(not_null<PeerData*> peer) const
 				tr::now,
 				lt_user,
 				{ user->firstName },
-				Ui::Text::RichLangValue);
+				tr::rich);
 		} else {
 			result.checkbox.text = tr::lng_delete_for_everyone_check(tr::now);
 		}
@@ -416,7 +437,7 @@ auto DeleteMessagesBox::revokeText(not_null<PeerData*> peer) const
 				tr::now,
 				lt_user,
 				{ user->firstName },
-				Ui::Text::RichLangValue);
+				tr::rich);
 		} else {
 			result.checkbox.text = tr::lng_delete_for_everyone_check(tr::now);
 		}
@@ -428,27 +449,27 @@ auto DeleteMessagesBox::revokeText(not_null<PeerData*> peer) const
 				result.description = tr::lng_selected_unsend_about_user_one(
 					tr::now,
 					lt_user,
-					Ui::Text::Bold(user->shortName()),
-					Ui::Text::WithEntities);
+					tr::bold(user->shortName()),
+					tr::marked);
 			} else {
 				result.description = tr::lng_selected_unsend_about_user(
 					tr::now,
 					lt_count,
 					canRevokeOutgoingCount,
 					lt_user,
-					Ui::Text::Bold(user->shortName()),
-					Ui::Text::WithEntities);
+					tr::bold(user->shortName()),
+					tr::marked);
 			}
 		} else if (canRevokeOutgoingCount == 1) {
 			result.description = tr::lng_selected_unsend_about_group_one(
 				tr::now,
-				Ui::Text::WithEntities);
+				tr::marked);
 		} else {
 			result.description = tr::lng_selected_unsend_about_group(
 				tr::now,
 				lt_count,
 				canRevokeOutgoingCount,
-				Ui::Text::WithEntities);
+				tr::marked);
 		}
 		return result;
 	}
@@ -530,10 +551,10 @@ void DeleteMessagesBox::deleteAndClear() {
 		? PaidPostType::None
 		: paidPostType();
 	if (warnPaidType != PaidPostType::None) {
-		const auto weak = Ui::MakeWeak(this);
+		const auto weak = base::make_weak(this);
 		const auto callback = [=](Fn<void()> close) {
 			close();
-			if (const auto strong = weak.data()) {
+			if (const auto strong = weak.get()) {
 				strong->_confirmedDeletePaidSuggestedPosts = true;
 				strong->deleteAndClear();
 			}
@@ -544,7 +565,7 @@ void DeleteMessagesBox::deleteAndClear() {
 				? tr::lng_suggest_warn_text_ton
 				: tr::lng_suggest_warn_text_stars)(
 					tr::now,
-					Ui::Text::RichLangValue),
+					tr::rich),
 			.confirmed = callback,
 			.confirmText = tr::lng_suggest_warn_delete_anyway(tr::now),
 			.confirmStyle = &st::attentionBoxButton,
@@ -562,16 +583,21 @@ void DeleteMessagesBox::deleteAndClear() {
 			!_revoke->checked());
 		Core::App().saveSettingsDelayed();
 	}
-	const auto revoke = _revoke ? _revoke->checked() : _revokeForBot;
+	const auto revoke = _revoke
+		? _revoke->checked()
+		: (_revokeForBot || _revokeJustClearForChannel);
 	const auto session = _session;
 	const auto invokeCallbackAndClose = [&] {
 		// deleteMessages can initiate closing of the current section,
 		// which will cause this box to be destroyed.
-		const auto weak = Ui::MakeWeak(this);
+		const auto weak = base::make_weak(this);
+		if (hasSavedMusicMessages()) {
+			uiShow()->showToast(tr::lng_saved_music_removed(tr::now));
+		}
 		if (const auto callback = _deleteConfirmedCallback) {
 			callback();
 		}
-		if (const auto strong = weak.data()) {
+		if (const auto strong = weak.get()) {
 			strong->closeBox();
 		}
 	};
@@ -616,8 +642,8 @@ void DeleteMessagesBox::deleteAndClear() {
 		if (_reportSpam->checked()) {
 			_moderateInChannel->session().api().request(
 				MTPchannels_ReportSpam(
-					_moderateInChannel->inputChannel,
-					_moderateFrom->input,
+					_moderateInChannel->inputChannel(),
+					_moderateFrom->input(),
 					MTP_vector<MTPint>(1, MTP_int(_ids[0].msg)))
 			).send();
 		}

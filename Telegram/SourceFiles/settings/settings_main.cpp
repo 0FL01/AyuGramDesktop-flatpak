@@ -84,7 +84,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QWindow>
 
 // AyuGram includes
-#include "ayu/ui/settings/settings_ayu.h"
+#include "ayu/ui/settings/settings_main.h"
 #include "ayu/ui/utils/ayu_profile_values.h"
 #include "ayu/utils/telegram_helpers.h"
 
@@ -156,7 +156,7 @@ Cover::Cover(
 			Window::GifPauseReason::Layer);
 	},
 	0, // customStatusLoopsLimit
-	Info::Profile::BadgeType::Extera | Info::Profile::BadgeType::ExteraSupporter)
+	Info::Profile::BadgeType::Extera | Info::Profile::BadgeType::ExteraSupporter | Info::Profile::BadgeType::ExteraCustom)
 , _userpic(
 	this,
 	controller,
@@ -209,10 +209,16 @@ Cover::Cover(
 			_badge.widget(),
 			_badge.sizeTag());
 	});
-	rpl::combine(
+	const auto isCustomBadge = isCustomBadgePeer(getBareID(_user));
+	const auto isExtera = isExteraPeer(getBareID(_user));
+	const auto isSupporter = isSupporterPeer(getBareID(_user));
+	if (isExtera || isSupporter || isCustomBadge) {
+		_exteraBadge.setPremiumClickCallback(badgeClickHandler(_user));
+	}
+	rpl::merge(
 		_badge.updated(),
 		_exteraBadge.updated()
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		refreshNameGeometry(width());
 	}, _name->lifetime());
 }
@@ -222,7 +228,7 @@ Cover::~Cover() = default;
 void Cover::setupChildGeometry() {
 	using namespace rpl::mappers;
 	widthValue(
-	) | rpl::start_with_next([=](int newWidth) {
+	) | rpl::on_next([=](int newWidth) {
 		_userpic->moveToLeft(
 			st::settingsPhotoLeft,
 			st::settingsPhotoTop,
@@ -236,22 +242,22 @@ void Cover::setupChildGeometry() {
 void Cover::initViewers() {
 	Info::Profile::NameValue(
 		_user
-	) | rpl::start_with_next([=](const QString &name) {
+	) | rpl::on_next([=](const QString &name) {
 		_name->setText(name);
 		refreshNameGeometry(width());
 	}, lifetime());
 
 	IDValue(
 		_user
-	) | rpl::start_with_next([=](const TextWithEntities &value) {
+	) | rpl::on_next([=](const TextWithEntities &value) {
 		_id->setText(value.text);
 		refreshIdGeometry(width());
 	}, lifetime());
 
 	Info::Profile::UsernameValue(
 		_user
-	) | rpl::start_with_next([=](const TextWithEntities &value) {
-		_username->setMarkedText(Ui::Text::Link(value.text.isEmpty()
+	) | rpl::on_next([=](const TextWithEntities &value) {
+		_username->setMarkedText(tr::link(value.text.isEmpty()
 			? tr::lng_settings_username_add(tr::now)
 			: value.text));
 		refreshUsernameGeometry(width());
@@ -294,9 +300,7 @@ void Cover::refreshNameGeometry(int newWidth) {
 		+ (_badge.widget()
 			   ? (_badge.widget()->width() + st::infoVerifiedCheckPosition.x())
 			   : 0);
-	const auto exteraBadgeTop = nameTop;
-	const auto exteraBadgeBottom = nameTop + _name->height();
-	_exteraBadge.move(exteraBadgeLeft, exteraBadgeTop, exteraBadgeBottom);
+	_exteraBadge.move(exteraBadgeLeft, badgeTop, badgeBottom);
 }
 
 void Cover::refreshIdGeometry(int newWidth) {
@@ -338,12 +342,12 @@ void Cover::refreshUsernameGeometry(int newWidth) {
 
 	const auto isPausedValue
 		= button->lifetime().make_state<rpl::variable<bool>>(isPaused());
-	isPausedValue->value() | rpl::start_with_next([=](bool value) {
+	isPausedValue->value() | rpl::on_next([=](bool value) {
 		ministars->setPaused(value);
 	}, ministarsContainer->lifetime());
 
 	ministarsContainer->paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		(*isPausedValue) = isPaused();
 		auto p = QPainter(ministarsContainer);
 		{
@@ -375,13 +379,13 @@ void Cover::refreshUsernameGeometry(int newWidth) {
 	}();
 	badge->resize(star.size() / style::DevicePixelRatio());
 	badge->paintRequest(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		auto p = QPainter(badge);
 		p.drawImage(0, 0, star);
 	}, badge->lifetime());
 
 	button->sizeValue(
-	) | rpl::start_with_next([=](const QSize &s) {
+	) | rpl::on_next([=](const QSize &s) {
 		badge->moveToLeft(
 			button->st().iconLeft
 				+ (st::menuIconShop.width() - badge->width()) / 2,
@@ -466,11 +470,10 @@ void SetupValidatePhoneNumberSuggestion(
 			content,
 			tr::lng_settings_suggestion_phone_number_about(
 				lt_link,
-				tr::lng_collectible_learn_more(
-				) | Ui::Text::ToLink(
+				tr::lng_collectible_learn_more(tr::url(
 					tr::lng_settings_suggestion_phone_number_about_link(
-						tr::now)),
-				Ui::Text::WithEntities),
+						tr::now))),
+				tr::marked),
 			st::boxLabel),
 		st::boxRowPadding);
 	label->setClickHandlerFilter([=, weak = base::make_weak(controller)](
@@ -507,7 +510,7 @@ void SetupValidatePhoneNumberSuggestion(
 		st::inviteLinkButton);
 	no->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	no->setClickedCallback([=] {
-		const auto sharedLabel = std::make_shared<QPointer<Ui::FlatLabel>>();
+		const auto sharedLabel = std::make_shared<base::weak_qptr<Ui::FlatLabel>>();
 		const auto height = st::boxLabel.style.font->height;
 		const auto customEmojiFactory = [=](
 			QStringView data,
@@ -531,7 +534,7 @@ void SetupValidatePhoneNumberSuggestion(
 					tr::lng_settings_suggestion_phone_number_change(
 						lt_emoji,
 						rpl::single(Ui::Text::SingleCustomEmoji(u"@"_q)),
-						Ui::Text::WithEntities),
+						tr::marked),
 					st::boxLabel,
 					st::defaultPopupMenu,
 					Ui::Text::MarkedContext{
@@ -541,7 +544,7 @@ void SetupValidatePhoneNumberSuggestion(
 		}));
 	});
 
-	wrap->widthValue() | rpl::start_with_next([=](int width) {
+	wrap->widthValue() | rpl::on_next([=](int width) {
 		const auto buttonWidth = (width - st::inviteLinkButtonsSkip) / 2;
 		yes->setFullWidth(buttonWidth);
 		no->setFullWidth(buttonWidth);
@@ -612,7 +615,7 @@ void SetupValidatePasswordSuggestion(
 		showOther(Settings::CloudPasswordSuggestionInputId());
 	});
 
-	wrap->widthValue() | rpl::start_with_next([=](int width) {
+	wrap->widthValue() | rpl::on_next([=](int width) {
 		const auto buttonWidth = (width - st::inviteLinkButtonsSkip) / 2;
 		yes->setFullWidth(buttonWidth);
 		no->setFullWidth(buttonWidth);
@@ -657,7 +660,7 @@ void SetupSections(
 	Ui::AddSkip(container);
 	addSection(
 		tr::ayu_AyuPreferences(),
-		Ayu::Id(),
+		AyuMain::Id(),
         { .icon = &st::menuIconPremium });
 	Ui::AddSkip(container);
 	Ui::AddDivider(container);
@@ -810,30 +813,12 @@ void SetupPremium(
 					? Lang::FormatCreditsAmountToShort(c).string
 					: QString();
 			}),
-			st::settingsButton);
+			st::settingsButton,
+			{ &st::menuIconTon });
 		button->addClickHandler([=] {
 			controller->setPremiumRef("settings");
 			showOther(CurrencyId());
 		});
-
-		const auto badge = Ui::CreateChild<Ui::RpWidget>(button.get());
-		const auto image = Ui::Earn::IconCurrencyColored(
-			st::tonFieldIconSize,
-			st::menuIconColor->c);
-
-		badge->resize(Size(st::tonFieldIconSize));
-		badge->paintRequest(
-		) | rpl::start_with_next([=] {
-			auto p = QPainter(badge);
-			p.drawImage(0, 0, image);
-		}, badge->lifetime());
-
-		button->sizeValue() | rpl::start_with_next([=](const QSize &s) {
-			badge->moveToLeft(
-				button->st().iconLeft
-					+ (st::menuIconShop.width() - badge->width()) / 2,
-				(s.height() - badge->height()) / 2);
-		}, badge->lifetime());
 	}
 	const auto button = AddButtonWithIcon(
 		container,
@@ -923,6 +908,7 @@ void SetupInterfaceScale(
 		icon ? st::settingsScalePadding : st::settingsBigScalePadding);
 	const auto slider = sliderWithLabel.slider;
 	const auto label = sliderWithLabel.label;
+	slider->setAccessibleName(tr::lng_settings_scale(tr::now));
 
 	const auto updateLabel = [=](int scale) {
 		const auto labelText = [&](int scale) {
@@ -1007,7 +993,7 @@ void SetupInterfaceScale(
 	button->toggledValue(
 	) | rpl::map([](bool checked) {
 		return checked ? style::kScaleAuto : cEvalScale(cConfigScale());
-	}) | rpl::start_with_next([=](int scale) {
+	}) | rpl::on_next([=](int scale) {
 		setScale(scale, setScale);
 	}, button->lifetime());
 

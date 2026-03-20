@@ -7,9 +7,123 @@
 	<key>CFBundleGetInfoString</key>
 	<string>Unofficial Telegram Desktop app</string>
 	<key>CFBundleIconFile</key>
-	<string>Icon.icns</string>
+	<string>AppIcon-Default.icns</string>
 	<key>CFBundleIconName</key>
-	<string>Icon.icns</string>
+	<string>AppIcon-Default.icns</string>
+    <key>CFBundleIcons</key>
+    <dict>
+        <key>CFBundlePrimaryIcon</key>
+        <dict>
+            <key>CFBundleIconFiles</key>
+            <array>
+                <string>AppIcon-Default</string>
+            </array>
+            <key>CFBundleIconName</key>
+            <string>AppIcon-Default</string>
+        </dict>
+        <key>CFBundleAlternateIcons</key>
+        <dict>
+            <key>AppIcon-Alt</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Alt</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Alt</string>
+            </dict>
+            <key>AppIcon-Discord</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Discord</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Discord</string>
+            </dict>
+            <key>AppIcon-Spotify</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Spotify</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Spotify</string>
+            </dict>
+            <key>AppIcon-Extera</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Extera</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Extera</string>
+            </dict>
+            <key>AppIcon-Nothing</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Nothing</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Nothing</string>
+            </dict>
+            <key>AppIcon-Bard</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Bard</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Bard</string>
+            </dict>
+            <key>AppIcon-Yaplus</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Yaplus</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Yaplus</string>
+            </dict>
+            <key>AppIcon-Win95</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Win95</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Win95</string>
+            </dict>
+            <key>AppIcon-Chibi</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Chibi</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Chibi</string>
+            </dict>
+            <key>AppIcon-Chibi2</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Chibi2</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Chibi2</string>
+            </dict>
+            <key>AppIcon-Extera2</key>
+            <dict>
+                <key>CFBundleIconFiles</key>
+                <array>
+                    <string>AppIcon-Extera2</string>
+                </array>
+                <key>CFBundleIconName</key>
+                <string>AppIcon-Extera2</string>
+            </dict>
+        </dict>
+    </dict>
 	<key>CFBundleIdentifier</key>
 	<string>@bundle_identifier_plist@</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -39,6 +153,19 @@
 			<array>
 				<string>tg</string>
 				<string>tonsite</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.data</string>
 			</array>
 		</dict>
 	</array>

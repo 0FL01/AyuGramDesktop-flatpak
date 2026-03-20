@@ -146,6 +146,8 @@ Data::CreditsHistoryEntry CreditsHistoryEntryFromTL(
 			? starrefAmount
 			: CreditsAmount()),
 		.paidMessagesCommission = paidMessagesCount ? starrefCommission : 0,
+		.limitedCount = parsedGift ? parsedGift->limitedCount : 0,
+		.limitedLeft = parsedGift ? parsedGift->limitedLeft : 0,
 		.starsConverted = int(nonUniqueGift
 			? nonUniqueGift->vconvert_stars().v
 			: 0),
@@ -153,6 +155,7 @@ Data::CreditsHistoryEntry CreditsHistoryEntryFromTL(
 		.floodSkip = int(tl.data().vfloodskip_number().value_or(0)),
 		.converted = stargift && incoming,
 		.stargift = stargift.has_value(),
+		.postsSearch = tl.data().is_posts_search(),
 		.giftUpgraded = tl.data().is_stargift_upgrade(),
 		.giftResale = tl.data().is_stargift_resale(),
 		.reaction = tl.data().is_reaction(),

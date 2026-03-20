@@ -57,7 +57,7 @@ void TopBar::registerUpdateControlCallback(
 		QObject *guard,
 		Callback &&callback) {
 	_updateControlCallbacks[guard] =[
-		weak = Ui::MakeWeak(guard),
+		weak = base::make_weak(guard),
 		callback = std::forward<Callback>(callback)
 	](anim::type animated) {
 		if (!weak) {
@@ -192,7 +192,7 @@ Ui::FadeWrap<Ui::RpWidget> *TopBar::pushButton(
 		!selectionMode() && !_searchModeEnabled,
 		anim::type::instant);
 	weak->widthValue(
-	) | rpl::start_with_next([this] {
+	) | rpl::on_next([this] {
 		updateControlsGeometry(width());
 	}, lifetime());
 	return weak;
@@ -261,7 +261,7 @@ void TopBar::createSearchView(
 			*focusLifetime = field->shownValue()
 				| rpl::filter([](bool shown) { return shown; })
 				| rpl::take(1)
-				| rpl::start_with_next([=] { field->setFocus(); });
+				| rpl::on_next([=] { field->setFocus(); });
 		} else {
 			focusLifetime->destroy();
 		}
@@ -294,7 +294,7 @@ void TopBar::createSearchView(
 	});
 
 	wrap->widthValue(
-	) | rpl::start_with_next([=](int newWidth) {
+	) | rpl::on_next([=](int newWidth) {
 		auto availableWidth = newWidth
 			- _st.searchRow.fieldCancelSkip;
 		fieldWrap->resizeToWidth(availableWidth);
@@ -305,7 +305,7 @@ void TopBar::createSearchView(
 	}, wrap->lifetime());
 
 	widthValue(
-	) | rpl::start_with_next([=](int newWidth) {
+	) | rpl::on_next([=](int newWidth) {
 		auto left = _back
 			? _st.back.width
 			: _st.titlePosition.x();
@@ -318,7 +318,7 @@ void TopBar::createSearchView(
 	}, wrap->lifetime());
 
 	field->alive(
-	) | rpl::start_with_done([=] {
+	) | rpl::on_done([=] {
 		field->setParent(nullptr);
 		removeButton(search);
 		clearSearchField();
@@ -329,7 +329,7 @@ void TopBar::createSearchView(
 
 	std::move(
 		shown
-	) | rpl::start_with_next([=](bool visible) {
+	) | rpl::on_next([=](bool visible) {
 		auto alreadyInSearch = !field->getLastText().isEmpty();
 		_searchModeAvailable = visible || alreadyInSearch;
 		updateControlsVisibility(anim::type::instant);
@@ -544,7 +544,7 @@ void TopBar::setStories(rpl::producer<Dialogs::Stories::Content> content) {
 		stories->setAttribute(Qt::WA_TransparentForMouseEvents);
 		label->setAttribute(Qt::WA_TransparentForMouseEvents);
 		stories->geometryValue(
-		) | rpl::start_with_next([=](QRect geometry) {
+		) | rpl::on_next([=](QRect geometry) {
 			const auto skip = _st.title.style.font->spacew;
 			label->move(
 				geometry.x() + geometry.width() + skip,
@@ -553,7 +553,7 @@ void TopBar::setStories(rpl::producer<Dialogs::Stories::Content> content) {
 		rpl::combine(
 			_storiesWrap->positionValue(),
 			label->geometryValue()
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			button->resize(
 				label->x() + label->width() + _st.titlePosition.x(),
 				_st.height);
@@ -569,7 +569,7 @@ void TopBar::setStories(rpl::producer<Dialogs::Stories::Content> content) {
 
 		rpl::duplicate(
 			last
-		) | rpl::start_with_next([=](const Content &content) {
+		) | rpl::on_next([=](const Content &content) {
 			const auto count = content.total;
 			if (_storiesCount != count) {
 				const auto was = (_storiesCount > 0);
@@ -589,17 +589,13 @@ void TopBar::setStories(rpl::producer<Dialogs::Stories::Content> content) {
 			}
 		}, _storiesLifetime);
 
-		_storiesLifetime.add([weak = QPointer<QWidget>(label)] {
-			delete weak.data();
+		_storiesLifetime.add([weak = base::make_weak(label)] {
+			delete weak.get();
 		});
 	} else {
 		_storiesCount = 0;
 	}
 	updateControlsVisibility(anim::type::instant);
-}
-
-void TopBar::setStoriesArchive(bool archive) {
-	_storiesArchive = archive;
 }
 
 void TopBar::setSelectedItems(SelectedItems &&items) {
@@ -638,10 +634,19 @@ void TopBar::updateSelectionState() {
 	_canDelete = computeCanDelete();
 	_canForward = computeCanForward();
 	_canUnpinStories = computeCanUnpinStories();
+	_canToggleStoryPin = computeCanToggleStoryPin();
+	_allStoriesInProfile = computeAllStoriesInProfile();
 	_selectionText->entity()->setValue(generateSelectedText());
 	_delete->toggle(_canDelete, anim::type::instant);
 	_forward->toggle(_canForward, anim::type::instant);
 	_toggleStoryInProfile->toggle(_canToggleStoryPin, anim::type::instant);
+	_toggleStoryInProfile->entity()->setIconOverride(
+		(_allStoriesInProfile
+			? &_st.storiesArchive.icon
+			: &_st.storiesSave.icon),
+		(_allStoriesInProfile
+			? &_st.storiesArchive.iconOver
+			: &_st.storiesSave.iconOver));
 	_toggleStoryPin->toggle(_canToggleStoryPin, anim::type::instant);
 	_toggleStoryPin->entity()->setIconOverride(
 		_canUnpinStories ? &_st.storiesUnpin.icon : nullptr,
@@ -662,6 +667,7 @@ void TopBar::createSelectionControls() {
 	_canForward = computeCanForward();
 	_canUnpinStories = computeCanUnpinStories();
 	_canToggleStoryPin = computeCanToggleStoryPin();
+	_allStoriesInProfile = computeAllStoriesInProfile();
 	_cancelSelection = wrap(Ui::CreateChild<Ui::FadeWrap<Ui::IconButton>>(
 		this,
 		object_ptr<Ui::IconButton>(this, _st.mediaCancel),
@@ -673,6 +679,7 @@ void TopBar::createSelectionControls() {
 	) | rpl::start_to_stream(
 		_selectionActionRequests,
 		_cancelSelection->lifetime());
+
 	_selectionText = wrap(Ui::CreateChild<Ui::FadeWrap<Ui::LabelWithNumbers>>(
 		this,
 		object_ptr<Ui::LabelWithNumbers>(
@@ -683,6 +690,11 @@ void TopBar::createSelectionControls() {
 		st::infoTopBarScale));
 	_selectionText->setDuration(st::infoTopBarDuration);
 	_selectionText->entity()->resize(0, _st.height);
+	_selectionText->naturalWidthValue(
+	) | rpl::skip(1) | rpl::on_next([=] {
+		updateSelectionControlsGeometry(width());
+	}, _selectionText->lifetime());
+
 	_forward = wrap(Ui::CreateChild<Ui::FadeWrap<Ui::IconButton>>(
 		this,
 		object_ptr<Ui::IconButton>(this, _st.mediaForward),
@@ -720,16 +732,18 @@ void TopBar::createSelectionControls() {
 			this,
 			object_ptr<Ui::IconButton>(
 				this,
-				_storiesArchive ? _st.storiesSave : _st.storiesArchive),
+				_allStoriesInProfile ? _st.storiesArchive : _st.storiesSave),
 			st::infoTopBarScale));
 	registerToggleControlCallback(
 		_toggleStoryInProfile.data(),
 		[this] { return selectionMode() && _canToggleStoryPin; });
 	_toggleStoryInProfile->setDuration(st::infoTopBarDuration);
 	_toggleStoryInProfile->entity()->clicks(
-	) | rpl::map_to(
-		SelectionAction::ToggleStoryInProfile
-	) | rpl::start_to_stream(
+	) | rpl::map([=] {
+		return _allStoriesInProfile
+			? SelectionAction::ToggleStoryToArchive
+			: SelectionAction::ToggleStoryToProfile;
+	}) | rpl::start_to_stream(
 		_selectionActionRequests,
 		_cancelSelection->lifetime());
 	_toggleStoryInProfile->entity()->setVisible(_canToggleStoryPin);
@@ -777,6 +791,12 @@ bool TopBar::computeCanToggleStoryPin() const {
 	return ranges::all_of(
 		_selectedItems.list,
 		&SelectedItem::canToggleStoryPin);
+}
+
+bool TopBar::computeAllStoriesInProfile() const {
+	return ranges::all_of(
+		_selectedItems.list,
+		&SelectedItem::storyInProfile);
 }
 
 Ui::StringWithNumbers TopBar::generateSelectedText() const {

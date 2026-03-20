@@ -8,6 +8,7 @@
 
 #include "apiwrap.h"
 #include "ayu_settings.h"
+#include "base/timer.h"
 #include "base/unixtime.h"
 #include "core/application.h"
 #include "data/data_user.h"
@@ -18,10 +19,21 @@
 
 namespace AyuWorker {
 
+void runOnce();
+
 std::unordered_map<ID, bool> state;
+
+base::Timer &workerTimer() {
+	static base::Timer timer([] {
+		runOnce();
+	});
+	return timer;
+}
 
 void markAsOnline(not_null<Main::Session*> session) {
 	state[session->userId().bare] = true;
+	workerTimer().cancel();
+	workerTimer().callEach(3000);
 }
 
 void lateInit() {
@@ -48,39 +60,30 @@ void runOnce() {
 	}
 
 	const auto t = base::unixtime::now();
-	const auto invalidateAll = cOtherOnline() >= t;
 
 	for (const auto &[index, account] : Core::App().domain().accounts()) {
 		if (account) {
 			if (const auto session = account->maybeSession()) {
 				const auto id = session->userId().bare;
 				if (!state.contains(id)) {
-					state[id] = true; // newly added account, I suppose
+					state[id] = true;
 				}
 
-				if (invalidateAll || state[id] || session->user()->lastseen().isOnline(t)) {
+				if (state[id] || session->user()->lastseen().isOnline(t)) {
 					session->api().request(MTPaccount_UpdateStatus(
 						MTP_bool(true)
 					)).send();
 					state[id] = false;
 
-					DEBUG_LOG(("[AyuGram] Sent offline for account with uid %1, invalidate %2").arg(id).arg(invalidateAll));
+					DEBUG_LOG(("[AyuGram] Sent offline for account with id %1").arg(id));
 				}
 			}
 		}
 	}
 }
 
-[[noreturn]] void loop() {
-	while (true) {
-		runOnce();
-		std::this_thread::sleep_for(std::chrono::seconds(3));
-	}
-}
-
 void initialize() {
-	std::thread t(loop);
-	t.detach();
+	workerTimer().callEach(3000);
 }
 
 }

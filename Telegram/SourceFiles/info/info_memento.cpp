@@ -85,7 +85,7 @@ Memento::Memento(std::vector<std::shared_ptr<ContentMemento>> stack)
 	}
 	for (const auto &topic : topics) {
 		topic->destroyed(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			for (auto i = begin(_stack); i != end(_stack);) {
 				if (i->get()->topic() == topic) {
 					i = _stack.erase(i);
@@ -100,7 +100,7 @@ Memento::Memento(std::vector<std::shared_ptr<ContentMemento>> stack)
 	}
 	for (const auto &sublist : sublists) {
 		sublist->destroyed(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			for (auto i = begin(_stack); i != end(_stack);) {
 				if (i->get()->sublist() == sublist) {
 					i = _stack.erase(i);
@@ -211,8 +211,6 @@ std::shared_ptr<ContentMemento> Memento::DefaultContent(
 		return std::make_shared<SimilarPeers::Memento>(peer);
 	case Section::Type::RequestsList:
 		return std::make_shared<RequestsList::Memento>(peer);
-	case Section::Type::PeerGifts:
-		return std::make_shared<PeerGifts::Memento>(peer);
 	case Section::Type::SavedSublists:
 		return std::make_shared<Saved::SublistsMemento>(&peer->session());
 	case Section::Type::Members:

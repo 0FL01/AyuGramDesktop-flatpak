@@ -48,6 +48,7 @@ class AbstractController;
 namespace Media {
 
 struct ListFoundItem;
+struct ListFoundItemWithSection;
 struct ListContext;
 class ListSection;
 class ListProvider;
@@ -70,6 +71,13 @@ public:
 	rpl::producer<SelectedItems> selectedListValue() const;
 	void selectionAction(SelectionAction action);
 
+	struct ReorderDescriptor {
+		Fn<void(int old, int pos, Fn<void()> done, Fn<void()> fail)> save;
+		Fn<bool(HistoryItem*)> filter;
+	};
+
+	void setReorderDescriptor(ReorderDescriptor descriptor);
+
 	QRect getCurrentSongGeometry();
 	rpl::producer<> checkForHide() const {
 		return _checkForHide.events();
@@ -84,6 +92,7 @@ public:
 	void unregisterHeavyItem(not_null<const BaseLayout*> item) override;
 	void repaintItem(not_null<const BaseLayout*> item) override;
 	bool itemVisible(not_null<const BaseLayout*> item) override;
+	not_null<StickerPremiumMark*> hiddenMark() override;
 
 	// AbstractTooltipShower interface
 	QString tooltipText() const override;
@@ -112,6 +121,24 @@ private:
 		Dragging,
 		PrepareSelect,
 		Selecting,
+		PrepareReorder,
+		Reordering,
+	};
+	struct ReorderState {
+		bool enabled = false;
+		int index = -1;
+		int targetIndex = -1;
+		QPoint startPos;
+		QPoint dragPoint;
+		QPoint currentPos;
+		BaseLayout *item = nullptr;
+		const Section *section = nullptr;
+	};
+	struct ShiftAnimation {
+		Ui::Animations::Simple xAnimation;
+		Ui::Animations::Simple yAnimation;
+		int shift = 0;
+		int targetShift = 0;
 	};
 	struct MouseState {
 		HistoryItem *item = nullptr;
@@ -171,6 +198,7 @@ private:
 	void itemLayoutChanged(not_null<const HistoryItem*> item);
 
 	void refreshRows();
+	void markStoryMsgsSelected();
 	void trackSession(not_null<Main::Session*> session);
 
 	[[nodiscard]] SelectedItems collectSelectedItems() const;
@@ -191,11 +219,12 @@ private:
 	void forwardItems(MessageIdsList &&items);
 	void deleteSelected();
 	void toggleStoryPinSelected();
-	void toggleStoryInProfileSelected();
+	void toggleStoryInProfileSelected(bool toProfile);
 	void deleteItem(GlobalMsgId globalId);
 	void deleteItems(SelectedItems &&items, Fn<void()> confirmed = nullptr);
 	void toggleStoryInProfile(
 		MessageIdsList &&items,
+		bool toProfile,
 		Fn<void()> confirmed = nullptr);
 	void toggleStoryPin(
 		MessageIdsList &&items,
@@ -230,7 +259,10 @@ private:
 	[[nodiscard]] auto findSectionAfterBottom(
 		std::vector<Section>::const_iterator from,
 		int bottom) const -> std::vector<Section>::const_iterator;
+	[[nodiscard]] auto findSectionAndItem(QPoint point) const
+		-> std::pair<std::vector<Section>::const_iterator, FoundItem>;
 	[[nodiscard]] FoundItem findItemByPoint(QPoint point) const;
+	[[nodiscard]] ListFoundItemWithSection findItemByPointWithSection(QPoint point) const;
 	[[nodiscard]] std::optional<FoundItem> findItemByItem(
 		const HistoryItem *item);
 	[[nodiscard]] FoundItem findItemDetails(not_null<BaseLayout*> item);
@@ -272,7 +304,22 @@ private:
 	void checkMoveToOtherViewer();
 	void clearHeavyItems();
 
-	void setActionBoxWeak(QPointer<Ui::BoxContent> box);
+	void setActionBoxWeak(base::weak_qptr<Ui::BoxContent> box);
+
+	void setupStoriesTrackIds();
+
+	void startReorder(const QPoint &globalPos);
+	void updateReorder(const QPoint &globalPos);
+	void finishReorder();
+	void cancelReorder();
+	void updateShiftAnimations();
+	[[nodiscard]] int itemIndexFromPoint(QPoint point) const;
+	[[nodiscard]] QRect itemGeometryByIndex(int index);
+	[[nodiscard]] BaseLayout *itemByIndex(int index);
+	[[nodiscard]] bool canReorder() const;
+	void reorderItemsInSections(int oldIndex, int newIndex);
+	void resetAllItemShifts();
+	void finishShiftAnimations();
 
 	const not_null<AbstractController*> _controller;
 	const std::unique_ptr<ListProvider> _provider;
@@ -305,15 +352,29 @@ private:
 
 	const std::unique_ptr<DateBadge> _dateBadge;
 
+	int _selectedLimit = 0;
+	int _storiesAddToAlbumId = 0;
+	int _storiesAddToAlbumTotal = 0;
+	base::flat_set<StoryId> _storiesInAlbum;
+	base::flat_set<MsgId> _storyMsgsToMarkSelected;
+	std::unique_ptr<StickerPremiumMark> _hiddenMark;
+
 	base::unique_qptr<Ui::PopupMenu> _contextMenu;
 	rpl::event_stream<> _checkForHide;
-	QPointer<Ui::BoxContent> _actionBoxWeak;
+	base::weak_qptr<Ui::BoxContent> _actionBoxWeak;
 	rpl::lifetime _actionBoxWeakLifetime;
 
 	QPoint _trippleClickPoint;
 	crl::time _trippleClickStartTime = 0;
 
 	base::flat_map<not_null<Main::Session*>, rpl::lifetime> _trackedSessions;
+
+	ReorderState _reorderState;
+	base::flat_map<int, ShiftAnimation> _shiftAnimations;
+	int _activeShiftAnimations = 0;
+	Ui::Animations::Simple _returnAnimation;
+	ReorderDescriptor _reorderDescriptor;
+	bool _inDragArea = false;
 
 };
 

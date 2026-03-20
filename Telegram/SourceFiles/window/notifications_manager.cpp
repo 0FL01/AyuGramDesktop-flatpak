@@ -36,15 +36,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_updates.h"
 #include "apiwrap.h"
 #include "main/main_account.h"
-#include "main/main_session.h"
 #include "main/main_domain.h"
+#include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "ui/text/text_utilities.h"
+#include "platform/platform_specific.h"
 
 #include <QtGui/QWindow>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QScreen>
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-
+#include "ayu/utils/telegram_helpers.h"
 
 #if __has_include(<gio/gio.hpp>)
 #include <gio/gio.hpp>
@@ -132,7 +136,21 @@ constexpr auto kSystemAlertDuration = crl::time(0);
 
 } // namespace
 
+const char kOptionCustomNotification[] = "custom-notification";
+
+base::options::toggle OptionCustomNotification({
+	.id = kOptionCustomNotification,
+	.name = "Force non-native notifications availability",
+	.description = "Allow to disable native notifications"
+		" even if custom notifications are broken on this platform",
+	.scope = [] {
+		return Platform::Notifications::Enforced();
+	},
+	.restartRequired = true,
+});
+
 const char kOptionGNotification[] = "gnotification";
+const char kOptionHideReplyButton[] = "hide-reply-button";
 
 base::options::toggle OptionGNotification({
 	.id = kOptionGNotification,
@@ -148,6 +166,12 @@ base::options::toggle OptionGNotification({
 #endif // __has_include(<gio/gio.hpp>)
 	},
 	.restartRequired = true,
+});
+
+base::options::toggle HideReplyButtonOption({
+	.id = kOptionHideReplyButton,
+	.name = "Hide reply button",
+	.description = "Hide reply button in notifications.",
 });
 
 struct System::Waiter {
@@ -174,7 +198,7 @@ System::System()
 , _waitForAllGroupedTimer([=] { showGrouped(); })
 , _manager(std::make_unique<DummyManager>(this)) {
 	settingsChanged(
-	) | rpl::start_with_next([=](ChangeType type) {
+	) | rpl::on_next([=](ChangeType type) {
 		if (type == ChangeType::DesktopEnabled) {
 			clearAll();
 		} else if (type == ChangeType::ViewParams) {
@@ -192,12 +216,16 @@ void System::createManager() {
 
 void System::setManager(Fn<std::unique_ptr<Manager>()> create) {
 	Expects(_manager != nullptr);
+	const auto oldManager = _manager.get();
 	const auto guard = gsl::finally([&] {
 		Ensures(_manager != nullptr);
+		if (oldManager != _manager.get()) {
+			_managerChanged.fire({});
+		}
 	});
 
 	if ((Core::App().settings().nativeNotifications()
-				|| Platform::Notifications::Enforced())
+				|| nativeEnforced())
 			&& Platform::Notifications::Supported()) {
 		if (_manager->type() == ManagerType::Native) {
 			return;
@@ -209,13 +237,26 @@ void System::setManager(Fn<std::unique_ptr<Manager>()> create) {
 		}
 	}
 
-	if (Platform::Notifications::Enforced()) {
+	if (nativeEnforced()) {
 		if (_manager->type() != ManagerType::Dummy) {
 			_manager = std::make_unique<DummyManager>(this);
 		}
 	} else if (_manager->type() != ManagerType::Default) {
 		_manager = std::make_unique<Default::Manager>(this);
 	}
+}
+
+Manager &System::manager() const {
+	Expects(_manager != nullptr);
+	return *_manager;
+}
+
+rpl::producer<> System::managerChanged() const {
+	return _managerChanged.events();
+}
+
+bool System::nativeEnforced() const {
+	return !OptionCustomNotification.value() && Platform::Notifications::Enforced();
 }
 
 Main::Session *System::findSession(uint64 sessionId) const {
@@ -253,7 +294,9 @@ System::SkipState System::skipNotification(
 	const auto item = notification.item;
 	const auto type = notification.type;
 	const auto messageType = (type == Data::ItemNotificationType::Message);
-	if (!item->notificationThread()->currentNotification()
+	const auto thread = item->maybeNotificationThread();
+	if (!thread
+		|| !thread->currentNotification()
 		|| (messageType && item->skipNotification())
 		|| (type == Data::ItemNotificationType::Reaction
 			&& skipReactionNotification(item))) {
@@ -356,7 +399,7 @@ void System::registerThread(not_null<Data::Thread*> thread) {
 	if (const auto topic = thread->asTopic()) {
 		const auto &[i, ok] = _watchedTopics.emplace(topic, rpl::lifetime());
 		if (ok) {
-			topic->destroyed() | rpl::start_with_next([=] {
+			topic->destroyed() | rpl::on_next([=] {
 				clearFromTopic(topic);
 			}, i->second);
 		}
@@ -365,7 +408,7 @@ void System::registerThread(not_null<Data::Thread*> thread) {
 			sublist,
 			rpl::lifetime());
 		if (ok) {
-			sublist->destroyed() | rpl::start_with_next([=] {
+			sublist->destroyed() | rpl::on_next([=] {
 				clearFromSublist(sublist);
 			}, i->second);
 		}
@@ -380,6 +423,10 @@ void System::schedule(Data::ItemNotification notification) {
 	const auto thread = item->notificationThread();
 	const auto skip = skipNotification(notification);
 	if (skip.value == SkipState::Skip) {
+		thread->popNotification(notification);
+		return;
+	}
+	if (isMessageHidden(item)) {
 		thread->popNotification(notification);
 		return;
 	}
@@ -705,9 +752,18 @@ void System::showNext() {
 		if (settings.soundNotify()) {
 			const auto owner = &alertThread->owner();
 			const auto id = owner->notifySettings().sound(alertThread).id;
+			auto volume
+				= owner->session().settings().ringtoneVolume(
+					alertThread->peer()->id,
+					alertThread->topicRootId(),
+					alertThread->monoforumPeerId());
+			if (!volume) {
+				volume = owner->session().settings().ringtoneVolume(
+					Data::DefaultNotifyType(alertThread->peer()));
+			}
 			_manager->maybePlaySound(crl::guard(&owner->session(), [=] {
 				const auto track = lookupSound(owner, id);
-				track->playOnce();
+				track->playOnce(volume ? volume * 0.01 : 0);
 				Media::Player::mixer()->suppressAll(track->getLengthMs());
 				Media::Player::mixer()->scheduleFaderCallback();
 			}));
@@ -977,8 +1033,29 @@ void System::notifySettingsChanged(ChangeType type) {
 	return _settingsChanged.fire(std::move(type));
 }
 
-void System::playSound(not_null<Main::Session*> session, DocumentId id) {
-	lookupSound(&session->data(), id)->playOnce();
+bool System::volumeSupported() const {
+	// Play through native notification system if toasts are enabled.
+	return Core::App().settings().soundNotify()
+		&& (!Core::App().settings().desktopNotify()
+			|| _manager->type() != ManagerType::Native
+			|| Platform::Notifications::VolumeSupported());
+}
+
+rpl::producer<bool> System::volumeSupportedValue() const {
+	return rpl::single(
+		rpl::empty_value()
+	) | rpl::then(
+		rpl::merge(settingsChanged() | rpl::to_empty, managerChanged())
+	) | rpl::map([=] {
+		return volumeSupported();
+	}) | rpl::distinct_until_changed();
+}
+
+void System::playSound(
+		not_null<Main::Session*> session,
+		DocumentId id,
+		float64 volumeOverride) {
+	lookupSound(&session->data(), id)->playOnce(volumeOverride);
 }
 
 Manager::DisplayOptions Manager::getNotificationOptions(
@@ -1004,7 +1081,8 @@ Manager::DisplayOptions Manager::getNotificationOptions(
 			&& (!topic || !Data::CanSendTexts(topic)))
 		|| peer->isBroadcast()
 		|| (peer->slowmodeSecondsLeft() > 0)
-		|| (peer->starsPerMessageChecked() > 0);
+		|| (peer->starsPerMessageChecked() > 0)
+		|| HideReplyButtonOption.value();
 	result.spoilerLoginCode = item
 		&& !item->out()
 		&& peer->isNotificationsUser()
@@ -1046,7 +1124,7 @@ TextWithEntities Manager::ComposeReactionNotification(
 			tr::now,
 			lt_reaction,
 			reactionWithEntities,
-			Ui::Text::WithEntities);
+			tr::marked);
 	};
 	if (hideContent) {
 		return simple(tr::lng_reaction_notext);
@@ -1059,7 +1137,7 @@ TextWithEntities Manager::ComposeReactionNotification(
 			reactionWithEntities,
 			lt_text,
 			item->notificationText(),
-			Ui::Text::WithEntities);
+			tr::marked);
 	};
 	if (!media || media->webpage()) {
 		return text();
@@ -1080,8 +1158,8 @@ TextWithEntities Manager::ComposeReactionNotification(
 				lt_reaction,
 				reactionWithEntities,
 				lt_emoji,
-				Ui::Text::WithEntities(sticker->alt),
-				Ui::Text::WithEntities);
+				tr::marked(sticker->alt),
+				tr::marked);
 		}
 		return simple(tr::lng_reaction_document);
 	} else if (const auto contact = media->sharedContact()) {
@@ -1100,8 +1178,8 @@ TextWithEntities Manager::ComposeReactionNotification(
 			lt_reaction,
 			reactionWithEntities,
 			lt_name,
-			Ui::Text::WithEntities(name),
-			Ui::Text::WithEntities);
+			tr::marked(name),
+			tr::marked);
 	} else if (media->location()) {
 		return simple(tr::lng_reaction_location);
 		// lng_reaction_live_location not used right now :(
@@ -1114,7 +1192,7 @@ TextWithEntities Manager::ComposeReactionNotification(
 				reactionWithEntities,
 				lt_title,
 				poll->question,
-				Ui::Text::WithEntities);
+				tr::marked);
 	} else if (media->game()) {
 		return simple(tr::lng_reaction_game);
 	} else if (media->invoice()) {
@@ -1187,7 +1265,7 @@ void Manager::notificationActivated(
 					.topicRootId = topicRootId,
 					.monoforumPeerId = monoforumPeerId,
 				},
-				SuggestPostOptions(),
+				SuggestOptions(),
 				MessageCursor{
 					length,
 					length,
@@ -1239,7 +1317,7 @@ Window::SessionController *Manager::openNotificationMessage(
 
 	const auto separateId = !topic
 		? Window::SeparateId(history->peer)
-		: history->peer->asChannel()->useSubsectionTabs()
+		: history->peer->useSubsectionTabs()
 		? Window::SeparateId(Window::SeparateType::Chat, topic)
 		: Window::SeparateId(Window::SeparateType::Forum, history);
 	const auto separate = Core::App().separateWindowFor(separateId);
@@ -1340,6 +1418,12 @@ void Manager::notificationReplied(
 	}
 }
 
+void Manager::maybePlaySound(Fn<void()> playSound) {
+	if (_system->volumeSupported()) {
+		doMaybePlaySound(std::move(playSound));
+	}
+}
+
 void NativeManager::doShowNotification(NotificationFields &&fields) {
 	const auto options = getNotificationOptions(
 		fields.item,
@@ -1429,6 +1513,28 @@ System::~System() = default;
 
 QString WrapFromScheduled(const QString &text) {
 	return QString::fromUtf8("\xF0\x9F\x93\x85 ") + text;
+}
+
+QRect NotificationDisplayRect(Window::Controller *controller) {
+	const auto displayChecksum
+		= Core::App().settings().notificationsDisplayChecksum();
+
+	auto screen = (QScreen*)(nullptr);
+	if (displayChecksum) {
+		using namespace Platform;
+		for (const auto candidateScreen : QGuiApplication::screens()) {
+			if (ScreenNameChecksum(candidateScreen) == displayChecksum) {
+				screen = candidateScreen;
+				break;
+			}
+		}
+	}
+
+	return screen
+		? screen->availableGeometry()
+		: controller
+		? controller->widget()->desktopRect()
+		: QGuiApplication::primaryScreen()->availableGeometry();
 }
 
 } // namespace Notifications

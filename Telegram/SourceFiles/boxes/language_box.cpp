@@ -51,6 +51,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
 
+// AyuGram includes
+#include "ayu/ayu_settings.h"
+
+
 namespace {
 
 using Language = Lang::Language;
@@ -908,7 +912,7 @@ void Content::setupContent(
 			inner,
 			st::defaultBox.margin.top()));
 
-		rows->isEmpty() | rpl::start_with_next([=](bool empty) {
+		rows->isEmpty() | rpl::on_next([=](bool empty) {
 			wrap->toggle(!empty, anim::type::instant);
 		}, rows->lifetime());
 
@@ -931,7 +935,7 @@ void Content::setupContent(
 		tr::lng_languages_none(),
 		st::membersAbout);
 	empty->entity()->sizeValue(
-	) | rpl::start_with_next([=](QSize size) {
+	) | rpl::on_next([=](QSize size) {
 		label->move(
 			(size.width() - label->width()) / 2,
 			(size.height() - label->height()) / 2);
@@ -951,7 +955,7 @@ void Content::setupContent(
 			main->isEmpty(),
 			other->isEmpty(),
 			_1 || _2
-		) | rpl::start_with_next([=](bool empty) {
+		) | rpl::on_next([=](bool empty) {
 			divider->toggle(!empty, anim::type::instant);
 		}, divider->lifetime());
 
@@ -959,7 +963,7 @@ void Content::setupContent(
 			a->hasSelection(
 			) | rpl::filter(
 				_1
-			) | rpl::start_with_next([=] {
+			) | rpl::on_next([=] {
 				b->setSelected(-1);
 			}, a->lifetime());
 		};
@@ -1048,7 +1052,7 @@ void Content::setupContent(
 	};
 	_activations = [=] {
 		if (!main && !other) {
-			return rpl::never<Language>() | rpl::type_erased();
+			return rpl::never<Language>() | rpl::type_erased;
 		} else if (!main) {
 			return other->activations();
 		} else if (!other) {
@@ -1057,7 +1061,7 @@ void Content::setupContent(
 		return rpl::merge(
 			main->activations(),
 			other->activations()
-		) | rpl::type_erased();
+		) | rpl::type_erased;
 	};
 	_changeChosen = [=](const QString &chosen) {
 		if (main) {
@@ -1134,12 +1138,12 @@ void LanguageBox::prepare() {
 		inner->heightValue(),
 		topContainer->heightValue(),
 		_1 + _2
-	) | rpl::start_with_next([=](int height) {
+	) | rpl::on_next([=](int height) {
 		accumulate_max(*max, height);
 		setDimensions(st::boxWidth, qMin(*max, st::boxMaxListHeight));
 	}, inner->lifetime());
 	topContainer->heightValue(
-	) | rpl::start_with_next([=](int height) {
+	) | rpl::on_next([=](int height) {
 		setInnerTopSkip(height);
 	}, inner->lifetime());
 
@@ -1154,7 +1158,7 @@ void LanguageBox::prepare() {
 	});
 
 	inner->activations(
-	) | rpl::start_with_next([=](const Language &language) {
+	) | rpl::on_next([=](const Language &language) {
 		// "#custom" is applied each time it's passed to switchToLanguage().
 		// So we check that the language really has changed.
 		const auto currentId = [] {
@@ -1190,13 +1194,21 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 	translateEnabled->toggledValue(
 	) | rpl::filter([](bool checked) {
 		return (checked != Core::App().settings().translateButtonEnabled());
-	}) | rpl::start_with_next([=](bool checked) {
+	}) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setTranslateButtonEnabled(checked);
 		Core::App().saveSettingsDelayed();
 	}, translateEnabled->lifetime());
 
 	using namespace rpl::mappers;
-	auto premium = Data::AmPremiumValue(&_controller->session());
+	auto premium = Data::AmPremiumValue(&_controller->session()) | rpl::map([=](bool val)
+	{
+		// const auto &settings = AyuSettings::getInstance();
+		// if (settings.translationProvider != "telegram") {
+		// 	return true;
+		// }
+		// return val;
+		return true;
+	});
 	const auto translateChat = container->add(object_ptr<Ui::SettingsButton>(
 		container,
 		tr::lng_translate_settings_chat(),
@@ -1207,22 +1219,21 @@ void LanguageBox::setupTop(not_null<Ui::VerticalLayout*> container) {
 			rpl::duplicate(premium),
 			_1 && _2),
 		_translateChatTurnOff.events()));
-	std::move(premium) | rpl::start_with_next([=](bool value) {
+	std::move(premium) | rpl::on_next([=](bool value) {
 		translateChat->setToggleLocked(!value);
 	}, translateChat->lifetime());
 
 	translateChat->toggledValue(
 	) | rpl::filter([=](bool checked) {
-		const auto premium = _controller->session().premium();
+		/*const auto premium = _controller->session().premium();
 		if (checked && !premium) {
 			ShowPremiumPreviewToBuy(
 				_controller,
 				PremiumFeature::RealTimeTranslation);
 			_translateChatTurnOff.fire(false);
-		}
-		return premium
-			&& (checked != Core::App().settings().translateChatEnabled());
-	}) | rpl::start_with_next([=](bool checked) {
+		}*/
+		return checked != Core::App().settings().translateChatEnabled();
+	}) | rpl::on_next([=](bool checked) {
 		Core::App().settings().setTranslateChatEnabled(checked);
 		Core::App().saveSettingsDelayed();
 	}, translateChat->lifetime());
@@ -1300,7 +1311,7 @@ base::binary_guard LanguageBox::Show(Window::SessionController *controller) {
 		manager.languageListChanged(
 		) | rpl::take(
 			1
-		) | rpl::start_with_next([=]() mutable {
+		) | rpl::on_next([=]() mutable {
 			const auto show = guard->alive();
 			if (lifetime) {
 				base::take(lifetime)->destroy();

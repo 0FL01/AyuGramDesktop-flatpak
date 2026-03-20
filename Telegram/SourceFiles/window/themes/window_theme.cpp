@@ -74,7 +74,8 @@ inline bool AreTestingTheme() {
 	return Ui::ReadBackgroundImage(
 		u":/gui/art/background.tgv"_q,
 		QByteArray(),
-		true);
+		true
+	).image;
 }
 
 [[nodiscard]] bool GoodImageFormatAndSize(const QImage &image) {
@@ -509,7 +510,7 @@ void ChatBackground::start() {
 	saveAdjustableColors();
 
 	_updates.events(
-	) | rpl::start_with_next([=](const BackgroundUpdate &update) {
+	) | rpl::on_next([=](const BackgroundUpdate &update) {
 		refreshThemeWatcher();
 		if (update.paletteChanged()) {
 			style::NotifyPaletteChanged();
@@ -521,7 +522,7 @@ void ChatBackground::start() {
 	Core::App().domain().activeSessionValue(
 	) | rpl::filter([=](Main::Session *session) {
 		return session != _session;
-	}) | rpl::start_with_next([=](Main::Session *session) {
+	}) | rpl::on_next([=](Main::Session *session) {
 		_session = session;
 		checkUploadWallPaper();
 	}, _lifetime);
@@ -558,7 +559,7 @@ void ChatBackground::start() {
 			: palette.windowText().color().lightness()
 				> palette.window().color().lightness();
 	}) | rpl::distinct_until_changed(
-	) | rpl::start_with_next([](bool dark) {
+	) | rpl::on_next([](bool dark) {
 		Core::App().settings().setSystemDarkMode(dark);
 	}, _lifetime);
 }
@@ -611,7 +612,7 @@ void ChatBackground::checkUploadWallPaper() {
 		return;
 	}
 	_wallPaperUploadLifetime = _session->uploader().documentReady(
-	) | rpl::start_with_next([=](const Storage::UploadedMedia &data) {
+	) | rpl::on_next([=](const Storage::UploadedMedia &data) {
 		if (data.fullId != _wallPaperUploadId) {
 			return;
 		}
@@ -1648,7 +1649,7 @@ std::unique_ptr<Ui::ChatTheme> DefaultChatThemeOn(rpl::lifetime &lifetime) {
 
 	push();
 	Background()->updates(
-	) | rpl::start_with_next([=](const BackgroundUpdate &update) {
+	) | rpl::on_next([=](const BackgroundUpdate &update) {
 		if (update.type == BackgroundUpdate::Type::New
 			|| update.type == BackgroundUpdate::Type::Changed) {
 			push();

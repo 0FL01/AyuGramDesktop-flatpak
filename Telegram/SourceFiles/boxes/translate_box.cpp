@@ -38,6 +38,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QLocale>
 
+// AyuGram includes
+#include "ayu/features/translator/ayu_translator.h"
+
+
 namespace Ui {
 namespace {
 
@@ -61,7 +65,7 @@ ShowButton::ShowButton(not_null<Ui::RpWidget*> parent)
 : RpWidget(parent)
 , _button(this, tr::lng_usernames_activate_confirm(tr::now)) {
 	_button.sizeValue(
-	) | rpl::start_with_next([=](const QSize &s) {
+	) | rpl::on_next([=](const QSize &s) {
 		resize(
 			s.width() + st::defaultEmojiSuggestions.fadeRight.width(),
 			s.height());
@@ -161,7 +165,7 @@ void TranslateBox(
 		rpl::combine(
 			container->widthValue(),
 			original->geometryValue()
-		) | rpl::start_with_next([=](int width, const QRect &rect) {
+		) | rpl::on_next([=](int width, const QRect &rect) {
 			show->moveToLeft(
 				width - show->width() - st::boxRowPadding.right(),
 				rect.y() + std::abs(lineHeight - show->height()) / 2);
@@ -169,7 +173,7 @@ void TranslateBox(
 		original->entity()->heightValue(
 		) | rpl::filter([](int height) {
 			return height > 0;
-		}) | rpl::take(1) | rpl::start_with_next([=](int height) {
+		}) | rpl::take(1) | rpl::on_next([=](int height) {
 			if (height > lineHeight) {
 				show->show(anim::type::instant);
 			}
@@ -189,7 +193,7 @@ void TranslateBox(
 			state->to.value() | rpl::map(LanguageName));
 
 		// Workaround.
-		state->to.value() | rpl::start_with_next([=] {
+		state->to.value() | rpl::on_next([=] {
 			subtitle->resizeToWidth(container->width()
 				- padding.left()
 				- padding.right());
@@ -208,7 +212,7 @@ void TranslateBox(
 		box,
 		CreateLoadingTextWidget(
 			box,
-			st::aboutLabel,
+			st::aboutLabel.style,
 			std::min(original->entity()->height() / lineHeight, kMaxLines),
 			state->to.value() | rpl::map([=](LanguageId id) {
 				return id.locale().textDirection() == Qt::RightToLeft;
@@ -226,9 +230,10 @@ void TranslateBox(
 	const auto send = [=](LanguageId to) {
 		loading->show(anim::type::instant);
 		translated->hide(anim::type::instant);
-		state->api.request(MTPmessages_TranslateText(
+		const auto reqId = Ayu::Translator::TranslateManager::currentInstance()->request(
+			&peer->session(),
 			MTP_flags(flags),
-			msgId ? peer->input : MTP_inputPeerEmpty(),
+			msgId ? peer->input() : MTP_inputPeerEmpty(),
 			(msgId
 				? MTP_vector<MTPint>(1, MTP_int(msgId))
 				: MTPVector<MTPint>()),
@@ -241,26 +246,28 @@ void TranslateBox(
 						text.entities,
 						Api::ConvertOption::SkipLocal)))),
 			MTP_string(to.twoLetterCode())
-		)).done([=](const MTPmessages_TranslatedText &result) {
+		).done([=](const MTPmessages_TranslatedText &result) {
 			const auto &data = result.data();
 			const auto &list = data.vresult().v;
 			if (list.isEmpty()) {
 				showText(
-					Ui::Text::Italic(tr::lng_translate_box_error(tr::now)));
+					tr::italic(tr::lng_translate_box_error(tr::now)));
 			} else {
-				showText(TextWithEntities{
-					.text = qs(list.front().data().vtext()),
-					.entities = Api::EntitiesFromMTP(
-						&peer->session(),
-						list.front().data().ventities().v),
-				});
+				showText(Api::ParseTextWithEntities(
+					&peer->session(),
+					list.front()));
 			}
 		}).fail([=](const MTP::Error &error) {
 			showText(
-				Ui::Text::Italic(tr::lng_translate_box_error(tr::now)));
+				tr::italic(tr::lng_translate_box_error(tr::now)));
 		}).send();
+
+		box->boxClosing() | rpl::on_next([=]
+		{
+			Ayu::Translator::TranslateManager::currentInstance()->cancel(reqId);
+		}, box->lifetime());
 	};
-	state->to.value() | rpl::start_with_next(send, box->lifetime());
+	state->to.value() | rpl::on_next(send, box->lifetime());
 
 	box->addLeftButton(tr::lng_settings_language(), [=] {
 		if (loading->toggled()) {
@@ -307,7 +314,7 @@ object_ptr<BoxContent> EditSkipTranslationLanguages() {
 	auto title = tr::lng_translate_settings_choose();
 	const auto selected = std::make_shared<std::vector<LanguageId>>(
 		Core::App().settings().skipTranslationLanguages());
-	const auto weak = std::make_shared<QPointer<BoxContent>>();
+	const auto weak = std::make_shared<base::weak_qptr<BoxContent>>();
 	const auto check = [=](LanguageId id) {
 		const auto already = ranges::contains(*selected, id);
 		if (already) {
@@ -316,7 +323,7 @@ object_ptr<BoxContent> EditSkipTranslationLanguages() {
 			selected->push_back(id);
 		}
 		if (already && selected->empty()) {
-			if (const auto strong = weak->data()) {
+			if (const auto strong = weak->get()) {
 				strong->showToast(
 					tr::lng_translate_settings_one(tr::now),
 					kSkipAtLeastOneDuration);

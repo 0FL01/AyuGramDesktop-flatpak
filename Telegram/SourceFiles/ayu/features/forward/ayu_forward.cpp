@@ -38,8 +38,7 @@ bool isForwarding(const PeerId &id) {
 		return state.state != ForwardState::State::Finished
 			&& state.currentChunk < state.totalChunks
 			&& !state.stopRequested
-			&& state.totalChunks
-			&& state.totalMessages;
+			&& ((state.totalChunks && state.totalMessages) || state.state == ForwardState::State::Downloading);
 	}
 	return false;
 }
@@ -85,7 +84,7 @@ std::pair<QString, QString> stateName(const PeerId &id) {
 	if (state->state == ForwardState::State::Preparing) {
 		status = tr::ayu_AyuForwardStatusPreparing(tr::now);
 	} else if (state->state == ForwardState::State::Downloading) {
-		status = tr::ayu_AyuForwardStatusLoadingMedia(tr::now);
+		return std::make_pair(tr::ayu_AyuForwardStatusLoadingMedia(tr::now), "");
 	} else if (state->state == ForwardState::State::Sending) {
 		status = tr::ayu_AyuForwardStatusForwarding(tr::now);
 	} else {
@@ -191,7 +190,7 @@ void sendMedia(
 								   data,
 								   primaryMedia->document()->duration(),
 								   mediaType == SendMediaType::Round,
-								   message.action);
+								   std::move(message));
 			return;
 		}
 		// at least try to send it as squared-video
@@ -221,7 +220,7 @@ bool isAyuForwardNeeded(const std::vector<not_null<HistoryItem*>> &items) {
 }
 
 bool isAyuForwardNeeded(not_null<HistoryItem*> item) {
-	if (item->isDeleted() || item->isAyuNoForwards() || item->ttlDestroyAt()) {
+	if (item->isDeleted() || item->isAyuNoForwards() || item->unsupportedTTL()) {
 		return true;
 	}
 	return false;
@@ -367,6 +366,7 @@ void forwardMessages(
 		}
 
 		auto message = Api::MessageToSend(Api::SendAction(session->data().history(peer->id)));
+		message.action.options.invertCaption = item->invertMedia();
 		message.action.replyTo = action.replyTo;
 
 		if (draft.options != Data::ForwardOptions::NoNamesAndCaptions) {
@@ -399,9 +399,9 @@ void forwardMessages(
 				auto &file = preparedMedia.files[j];
 
 				QFile f(file.path);
-				if (groupMedia[j]->photo() && f.size() < groupMedia[j]->photo()->imageByteSize(Data::PhotoSize::Large)
-					||
-					groupMedia[j]->document() && f.size() < groupMedia[j]->document()->size
+				if (
+                    (groupMedia[j]->photo() && f.size() < groupMedia[j]->photo()->imageByteSize(Data::PhotoSize::Large)) ||
+					(groupMedia[j]->document() && f.size() < groupMedia[j]->document()->size)
 				) {
 					preparedMedia.files.erase(preparedMedia.files.begin() + j);
 				}

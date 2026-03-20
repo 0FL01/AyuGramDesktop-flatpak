@@ -11,6 +11,8 @@
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/data/ayu_database.h"
+#include "features/translator/ayu_translator.h"
+#include "features/filters/shadow_ban_utils.h"
 #include "lang/lang_instance.h"
 #include "utils/rc_manager.h"
 
@@ -32,6 +34,7 @@ void initUiSettings() {
 
 	AyuUiSettings::setMonoFont(settings.monoFont);
 	AyuUiSettings::setWideMultiplier(settings.wideMultiplier);
+	AyuUiSettings::setMaterialSwitches(settings.materialSwitches);
 }
 
 void initDatabase() {
@@ -46,12 +49,17 @@ void initRCManager() {
 	RCManager::getInstance().start();
 }
 
+void initTranslator() {
+	Ayu::Translator::TranslateManager::init();
+}
+
 void init() {
 	initLang();
 	initDatabase();
 	initUiSettings();
 	initWorker();
 	initRCManager();
+	initTranslator();
 }
 
 }

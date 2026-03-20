@@ -45,12 +45,9 @@ Main::Session &TodoListData::session() const {
 }
 
 bool TodoListData::applyChanges(const MTPDtodoList &todolist) {
-	const auto newTitle = TextWithEntities{
-		.text = qs(todolist.vtitle().data().vtext()),
-		.entities = Api::EntitiesFromMTP(
-			&session(),
-			todolist.vtitle().data().ventities().v),
-	};
+	const auto newTitle = Api::ParseTextWithEntities(
+		&session(),
+		todolist.vtitle());
 	const auto newFlags = (todolist.is_others_can_append()
 		? Flag::OthersCanAppend
 		: Flag())
@@ -101,8 +98,8 @@ bool TodoListData::applyCompletions(
 	};
 	for (auto &item : items) {
 		const auto completion = lookup(item.id);
-		const auto by = (completion && completion->vcompleted_by().v)
-			? owner().user(UserId(completion->vcompleted_by().v)).get()
+		const auto by = completion
+			? owner().peer(peerFromMTP(completion->vcompleted_by())).get()
 			: nullptr;
 		const auto date = completion ? completion->vdate().v : TimeId();
 		if (item.completedBy != by || item.completionDate != date) {
@@ -222,12 +219,7 @@ TodoListItem TodoListItemFromMTP(
 		const MTPTodoItem &item) {
 	const auto &data = item.data();
 	return {
-		.text = TextWithEntities{
-			.text = qs(data.vtitle().data().vtext()),
-			.entities = Api::EntitiesFromMTP(
-				session,
-				data.vtitle().data().ventities().v),
-		},
+		.text = Api::ParseTextWithEntities(session, data.vtitle()),
 		.id = data.vid().v,
 	};
 }

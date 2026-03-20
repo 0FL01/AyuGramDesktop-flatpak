@@ -27,7 +27,7 @@
 
 namespace MessageHistory {
 
-class FixedBar final : public TWidget
+class FixedBar final : public Ui::RpWidget
 {
 public:
 	FixedBar(
@@ -72,7 +72,7 @@ FixedBar::FixedBar(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
 	not_null<PeerData*> peer)
-	: TWidget(parent), _controller(controller), _peer(peer), _backButton(
+	: Ui::RpWidget(parent), _controller(controller), _peer(peer), _backButton(
 		  this,
 		  &controller->session(),
 		  tr::lng_terms_back(tr::now),
@@ -134,7 +134,7 @@ void FixedBar::mousePressEvent(QMouseEvent *e) {
 	if (e->button() == Qt::LeftButton) {
 		goBack();
 	} else {
-		TWidget::mousePressEvent(e);
+		Ui::RpWidget::mousePressEvent(e);
 	}
 }
 
@@ -157,7 +157,7 @@ Widget::Widget(
 	_fixedBarShadow->raise();
 
 	controller->adaptive().value(
-	) | rpl::start_with_next([=]
+	) | rpl::on_next([=]
 							 {
 								 updateAdaptiveLayout();
 							 },
@@ -165,7 +165,7 @@ Widget::Widget(
 
 	_inner = _scroll->setOwnedWidget(object_ptr<InnerWidget>(this, controller, peer, item, topicId));
 	_inner->scrollToSignal(
-	) | rpl::start_with_next([=](int top)
+	) | rpl::on_next([=](int top)
 							 {
 								 _scroll->scrollToY(top);
 							 },
@@ -174,7 +174,7 @@ Widget::Widget(
 	_scroll->move(0, _fixedBar->height());
 	_scroll->show();
 	_scroll->scrolls(
-	) | rpl::start_with_next([=]
+	) | rpl::on_next([=]
 							 {
 								 onScroll();
 							 },

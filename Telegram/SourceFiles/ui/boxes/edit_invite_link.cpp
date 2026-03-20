@@ -286,7 +286,7 @@ void EditInviteLinkBox(
 		}
 	};
 
-	const auto guard = MakeWeak(box);
+	const auto guard = base::make_weak(box);
 	expireGroup->setChangedCallback([=](int value) {
 		if (value) {
 			state->expireValue = value;
@@ -343,7 +343,7 @@ void EditInviteLinkBox(
 					: QString::number(state->usageValue)),
 				200'000);
 			wrap->widthValue(
-			) | rpl::start_with_next([=](int width) {
+			) | rpl::on_next([=](int width) {
 				input->resize(width, input->height());
 				input->moveToLeft(0, st::boxPadding.bottom());
 			}, input->lifetime());

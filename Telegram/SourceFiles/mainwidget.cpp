@@ -270,16 +270,16 @@ MainWidget::MainWidget(
 	}
 
 	_history->cancelRequests(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		handleHistoryBack();
 	}, lifetime());
 
 	Core::App().calls().currentCallValue(
-	) | rpl::start_with_next([=](Calls::Call *call) {
+	) | rpl::on_next([=](Calls::Call *call) {
 		setCurrentCall(call);
 	}, lifetime());
 	Core::App().calls().currentGroupCallValue(
-	) | rpl::start_with_next([=](Calls::GroupCall *call) {
+	) | rpl::on_next([=](Calls::GroupCall *call) {
 		setCurrentGroupCall(call);
 	}, lifetime());
 	if (_callTopBar) {
@@ -290,12 +290,12 @@ MainWidget::MainWidget(
 		floatPlayerDelegate());
 
 	Core::App().floatPlayerClosed(
-	) | rpl::start_with_next([=](FullMsgId itemId) {
+	) | rpl::on_next([=](FullMsgId itemId) {
 		floatPlayerClosed(itemId);
 	}, lifetime());
 
 	Core::App().exportManager().currentView(
-	) | rpl::start_with_next([=](Export::View::PanelController *view) {
+	) | rpl::on_next([=](Export::View::PanelController *view) {
 		setCurrentExportView(view);
 	}, lifetime());
 	if (_exportTopBar) {
@@ -303,12 +303,12 @@ MainWidget::MainWidget(
 	}
 
 	Media::Player::instance()->closePlayerRequests(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		closeBothPlayers();
 	}, lifetime());
 
 	Media::Player::instance()->updatedNotifier(
-	) | rpl::start_with_next([=](const Media::Player::TrackState &state) {
+	) | rpl::on_next([=](const Media::Player::TrackState &state) {
 		handleAudioUpdate(state);
 	}, lifetime());
 	handleAudioUpdate(Media::Player::instance()->getState(AudioMsgId::Type::Song));
@@ -318,7 +318,7 @@ MainWidget::MainWidget(
 	}
 
 	_controller->chatsForceDisplayWideChanges(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		crl::on_main(this, [=] {
 			updateDialogsWidthAnimated();
 		});
@@ -335,13 +335,13 @@ MainWidget::MainWidget(
 		Core::App().settings().dialogsNoChatWidthRatioChanges(
 		) | filter(false) | rpl::to_empty,
 		Core::App().settings().thirdColumnWidthChanges() | rpl::to_empty
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		updateControlsGeometry();
 	}, lifetime());
 
 	session().changes().historyUpdates(
 		Data::HistoryUpdate::Flag::MessageSent
-	) | rpl::start_with_next([=](const Data::HistoryUpdate &update) {
+	) | rpl::on_next([=](const Data::HistoryUpdate &update) {
 		const auto history = update.history;
 		history->forgetScrollState();
 		if (const auto from = history->peer->migrateFrom()) {
@@ -354,7 +354,7 @@ MainWidget::MainWidget(
 
 	session().changes().entryUpdates(
 		Data::EntryUpdate::Flag::LocalDraftSet
-	) | rpl::start_with_next([=](const Data::EntryUpdate &update) {
+	) | rpl::on_next([=](const Data::EntryUpdate &update) {
 		auto params = Window::SectionShow();
 		params.reapplyLocalDraft = true;
 		controller->showThread(
@@ -385,14 +385,14 @@ MainWidget::MainWidget(
 			return std::make_tuple(key, can);
 		});
 	}) | rpl::flatten_latest(
-	) | rpl::start_with_next([this](Dialogs::Key key, bool canWrite) {
+	) | rpl::on_next([this](Dialogs::Key key, bool canWrite) {
 		updateThirdColumnToCurrentChat(key, canWrite);
 	}, lifetime());
 
 	QCoreApplication::instance()->installEventFilter(this);
 
 	Media::Player::instance()->tracksFinished(
-	) | rpl::start_with_next([=](AudioMsgId::Type type) {
+	) | rpl::on_next([=](AudioMsgId::Type type) {
 		if (type == AudioMsgId::Type::Voice) {
 			const auto songState = Media::Player::instance()->getState(
 				AudioMsgId::Type::Song);
@@ -409,7 +409,7 @@ MainWidget::MainWidget(
 	}, lifetime());
 
 	_controller->adaptive().changes(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		handleAdaptiveLayoutUpdate();
 	}, lifetime());
 
@@ -433,7 +433,11 @@ MainWidget::MainWidget(
 	session().data().stickers().notifySavedGifsUpdated();
 }
 
-MainWidget::~MainWidget() = default;
+MainWidget::~MainWidget() {
+	if (_controller->activeChatCurrent()) {
+		session().api().saveCurrentDraftToCloud();
+	}
+}
 
 Main::Session &MainWidget::session() const {
 	return _controller->session();
@@ -450,7 +454,7 @@ void MainWidget::setupConnectingWidget() {
 		&session().account(),
 		_controller->adaptive().oneColumnValue() | rpl::map(!_1));
 	_controller->connectingBottomSkipValue(
-	) | rpl::start_with_next([=](int skip) {
+	) | rpl::on_next([=](int skip) {
 		_connecting->setBottomSkip(skip);
 	}, lifetime());
 }
@@ -612,7 +616,7 @@ bool MainWidget::shareUrl(
 			.topicRootId = topicRootId,
 			.monoforumPeerId = monoforumPeerId,
 		},
-		SuggestPostOptions(),
+		SuggestOptions(),
 		cursor,
 		Data::WebPageDraft()));
 	history->clearLocalEditDraft(topicRootId, monoforumPeerId);
@@ -727,7 +731,7 @@ void MainWidget::hiderLayer(base::unique_qptr<Window::HistoryHider> hider) {
 	_hider->setParent(this);
 
 	_hider->hidden(
-	) | rpl::start_with_next([=, instance = _hider.get()] {
+	) | rpl::on_next([=, instance = _hider.get()] {
 		clearHider(instance);
 		instance->hide();
 		instance->deleteLater();
@@ -880,7 +884,7 @@ void MainWidget::createPlayer() {
 		rpl::merge(
 			_player->heightValue() | rpl::map_to(true),
 			_player->shownValue()
-		) | rpl::start_with_next(
+		) | rpl::on_next(
 			[this] { playerHeightUpdated(); },
 			_player->lifetime());
 		_player->entity()->setCloseCallback([=] {
@@ -899,7 +903,7 @@ void MainWidget::createPlayer() {
 		});
 
 		_player->entity()->togglePlaylistRequests(
-		) | rpl::start_with_next([=](bool shown) {
+		) | rpl::on_next([=](bool shown) {
 			if (!shown) {
 				_playerPlaylist->hideFromOther();
 				return;
@@ -959,7 +963,7 @@ void MainWidget::setCurrentCall(Calls::Call *call) {
 	if (call) {
 		_callTopBar.destroy();
 		call->stateValue(
-		) | rpl::start_with_next([=](Calls::Call::State state) {
+		) | rpl::on_next([=](Calls::Call::State state) {
 			using State = Calls::Call::State;
 			if (state != State::Established) {
 				destroyCallTopBar();
@@ -981,7 +985,7 @@ void MainWidget::setCurrentGroupCall(Calls::GroupCall *call) {
 	if (call) {
 		_callTopBar.destroy();
 		_currentGroupCall->stateValue(
-		) | rpl::start_with_next([=](Calls::GroupCall::State state) {
+		) | rpl::on_next([=](Calls::GroupCall::State state) {
 			using State = Calls::GroupCall::State;
 			if (state != State::Creating
 				&& state != State::Waiting
@@ -1011,7 +1015,7 @@ void MainWidget::createCallTopBar(
 			: object_ptr<Calls::TopBar>(this, group, show)));
 	_callTopBar->entity()->initBlobsUnder(this, _callTopBar->geometryValue());
 	_callTopBar->heightValue(
-	) | rpl::start_with_next([this](int value) {
+	) | rpl::on_next([this](int value) {
 		callTopBarHeightUpdated(value);
 	}, lifetime());
 	orderWidgets();
@@ -1047,7 +1051,7 @@ void MainWidget::setCurrentExportView(Export::View::PanelController *view) {
 	_currentExportView = view;
 	if (_currentExportView) {
 		_currentExportView->progressState(
-		) | rpl::start_with_next([=](Export::View::Content &&data) {
+		) | rpl::on_next([=](Export::View::Content &&data) {
 			if (!data.rows.empty()
 				&& data.rows[0].id == Export::View::Content::kDoneId) {
 				LOG(("Export Info: Destroy top bar by Done."));
@@ -1073,7 +1077,7 @@ void MainWidget::createExportTopBar(Export::View::Content &&data) {
 		object_ptr<Export::View::TopBar>(this, std::move(data)),
 		_controller->adaptive().oneColumnValue());
 	_exportTopBar->entity()->clicks(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		if (_currentExportView) {
 			_currentExportView->activatePanel();
 		}
@@ -1091,7 +1095,7 @@ void MainWidget::createExportTopBar(Export::View::Content &&data) {
 	rpl::merge(
 		_exportTopBar->heightValue() | rpl::map_to(true),
 		_exportTopBar->shownValue()
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		exportTopBarHeightUpdated();
 	}, _exportTopBar->lifetime());
 }
@@ -1642,7 +1646,7 @@ bool MainWidget::saveSectionInStack(
 	const auto raw = _stack.back().get();
 	raw->setThirdSectionWeak(_thirdSection.data());
 	raw->removeRequests(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		for (auto i = begin(_stack); i != end(_stack); ++i) {
 			if (i->get() == raw) {
 				_stack.erase(i);
@@ -1864,7 +1868,7 @@ void MainWidget::showNewSection(
 	if (newThirdSection) {
 		_thirdSection = std::move(newThirdSection);
 		_thirdSection->removeRequests(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			destroyThirdSection();
 			_thirdShadow.destroy();
 			updateControlsGeometry();
@@ -2000,23 +2004,23 @@ void MainWidget::showNonPremiumLimitToast(bool download) {
 				tr::now,
 				lt_percent,
 				TextWithEntities{ QString::number(percent - 100) },
-				Ui::Text::RichLangValue)
+				tr::rich)
 		: (download
 			? tr::lng_limit_download_increase_times
 			: tr::lng_limit_upload_increase_times)(
 				tr::now,
 				lt_count,
 				percent / 100,
-				Ui::Text::RichLangValue);
+				tr::rich);
 	auto text = (download
 		? tr::lng_limit_download_subscribe
 		: tr::lng_limit_upload_subscribe)(
 			tr::now,
 			lt_link,
-			Ui::Text::Link(Ui::Text::Bold(link)),
+			tr::link(tr::bold(link)),
 			lt_increase,
 			TextWithEntities{ increase },
-			Ui::Text::RichLangValue);
+			tr::rich);
 	auto filter = [=](ClickHandlerPtr handler, Qt::MouseButton button) {
 		Settings::ShowPremium(
 			controller(),
@@ -2904,17 +2908,30 @@ bool MainWidget::contentOverlapped(const QRect &globalRect) {
 void MainWidget::activate() {
 	if (_showAnimation) {
 		return;
-	} else if (const auto paths = cSendPaths(); !paths.isEmpty()) {
-		const auto interpret = u"interpret://"_q;
-		cSetSendPaths(QStringList());
-		if (paths[0].startsWith(interpret)) {
-			const auto error = Support::InterpretSendPath(
-				_controller,
-				paths[0].mid(interpret.size()));
-			if (!error.isEmpty()) {
-				_controller->show(Ui::MakeInformBox(error));
+	}
+	const auto urls = base::take(cRefStartUrls());
+	const auto interprets = urls | ranges::views::filter([](const QUrl &url) {
+		return url.scheme() == u"interpret"_q;
+	}) | ranges::views::transform([](const QUrl &url) {
+		return url.path();
+	}) | ranges::to<QStringList>;
+	const auto paths = urls | ranges::views::filter(
+		&QUrl::isLocalFile
+	) | ranges::views::transform(
+		&QUrl::toLocalFile
+	) | ranges::to<QStringList>;
+	if (!interprets.isEmpty() || !paths.isEmpty()) {
+		if (!interprets.isEmpty()) {
+			for (const auto &interpret : interprets) {
+				const auto error = Support::InterpretSendPath(
+					_controller,
+					interpret);
+				if (!error.isEmpty()) {
+					_controller->show(Ui::MakeInformBox(error));
+				}
 			}
-		} else {
+		}
+		if (!paths.isEmpty()) {
 			const auto chosen = [=](not_null<Data::Thread*> thread) {
 				return sendPaths(thread, paths);
 			};

@@ -12,6 +12,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "boxes/ringtones_box.h"
 #include "boxes/peer_list_box.h"
+#include "core/application.h"
+#include "data/notify/data_peer_notify_volume.h"
 #include "boxes/peer_list_controllers.h"
 #include "data/notify/data_notify_settings.h"
 #include "data/data_changes.h"
@@ -21,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
 #include "menu/menu_mute.h"
+#include "platform/platform_notifications_manager.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/popup_menu.h"
@@ -145,7 +148,7 @@ void AddExceptionBoxController::prepareViewHook() {
 		Data::PeerUpdate::Flag::Notifications
 	) | rpl::filter([=](const Data::PeerUpdate &update) {
 		return update.peer == _lastClickedPeer;
-	}) | rpl::start_with_next([=] {
+	}) | rpl::on_next([=] {
 		if (const auto onstack = _done) {
 			onstack(_lastClickedPeer);
 		}
@@ -210,13 +213,13 @@ void ExceptionsController::prepare() {
 	refreshRows();
 
 	session().data().notifySettings().exceptionsUpdates(
-	) | rpl::filter(rpl::mappers::_1 == _type) | rpl::start_with_next([=] {
+	) | rpl::filter(rpl::mappers::_1 == _type) | rpl::on_next([=] {
 		refreshRows();
 	}, lifetime());
 
 	session().changes().peerUpdates(
 		Data::PeerUpdate::Flag::Notifications
-	) | rpl::start_with_next([=](const Data::PeerUpdate &update) {
+	) | rpl::on_next([=](const Data::PeerUpdate &update) {
 		const auto peer = update.peer;
 		if (const auto row = delegate()->peerListFindRow(peer->id.value)) {
 			if (peer->notify().muteUntil().has_value()) {
@@ -379,6 +382,15 @@ void ExceptionsController::sort() {
 	Unexpected("Type in Title.");
 }
 
+[[nodiscard]] rpl::producer<QString> VolumeSubtitle(Notify type) {
+	switch (type) {
+	case Notify::User: return tr::lng_notification_volume_private_chats();
+	case Notify::Group: return tr::lng_notification_volume_groups();
+	case Notify::Broadcast: return tr::lng_notification_volume_channel();
+	}
+	Unexpected("Type in VolumeSubtitle.");
+}
+
 void SetupChecks(
 		not_null<Ui::VerticalLayout*> container,
 		not_null<Window::SessionController*> controller,
@@ -461,11 +473,11 @@ void SetupChecks(
 	};
 	settings->defaultUpdates(
 		Notify::User
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		toneLabel->fire(label());
 	}, toneInner->lifetime());
 	session->api().ringtones().listUpdates(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		toneLabel->fire(label());
 	}, toneInner->lifetime());
 
@@ -476,10 +488,28 @@ void SetupChecks(
 		st::settingsButton,
 		{ &st::menuIconSoundOn });
 
+	{
+		auto controller = DefaultRingtonesVolumeController(session, type);
+		Ui::AddRingtonesVolumeSlider(
+			toneInner,
+			rpl::single(true),
+			VolumeSubtitle(type),
+			Data::VolumeController{
+				.volume = base::take(controller.volume),
+				.saveVolume = [=](ushort volume) {
+					Core::App().notifications().playSound(
+						session,
+						toneValue().id,
+						0.01 * volume);
+					controller.saveVolume(volume);
+				},
+			});
+	}
+
 	enabled->toggledValue(
 	) | rpl::filter([=](bool value) {
 		return (value != NotificationsEnabledForType(session, type));
-	}) | rpl::start_with_next([=](bool value) {
+	}) | rpl::on_next([=](bool value) {
 		settings->defaultUpdate(type, Data::MuteValue{
 			.unmute = value,
 			.forever = !value,
@@ -490,7 +520,7 @@ void SetupChecks(
 	) | rpl::filter([=](bool enabled) {
 		const auto sound = settings->defaultSettings(type).sound();
 		return (!sound || !sound->none) != enabled;
-	}) | rpl::start_with_next([=](bool enabled) {
+	}) | rpl::on_next([=](bool enabled) {
 		const auto value = Data::NotifySound{ .none = !enabled };
 		settings->defaultUpdate(type, {}, {}, value);
 	}, sound->lifetime());
@@ -499,6 +529,8 @@ void SetupChecks(
 		controller->show(Box(RingtonesBox, session, toneValue(), [=](
 				Data::NotifySound sound) {
 			settings->defaultUpdate(type, {}, {}, sound);
+		}, Data::VolumeController{
+			DefaultRingtonesVolumeController(session, type).volume,
 		}));
 	});
 }
@@ -530,7 +562,7 @@ void SetupExceptions(
 	state->controller->setDelegate(state->delegate.get());
 
 	add->setClickedCallback([=] {
-		const auto box = std::make_shared<QPointer<Ui::BoxContent>>();
+		const auto box = std::make_shared<base::weak_qptr<Ui::BoxContent>>();
 		const auto done = [=](not_null<PeerData*> peer) {
 			state->controller->bringToTop(peer);
 			if (*box) {

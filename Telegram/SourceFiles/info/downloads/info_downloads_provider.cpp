@@ -16,8 +16,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document.h"
 #include "data/data_media_types.h"
 #include "data/data_session.h"
-#include "main/main_session.h"
 #include "main/main_account.h"
+#include "main/main_app_config.h"
+#include "main/main_session.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
 #include "history/history.h"
@@ -34,9 +35,10 @@ using namespace Media;
 } // namespace
 
 Provider::Provider(not_null<AbstractController*> controller)
-: _controller(controller) {
+: _controller(controller)
+, _storiesAddToAlbumId(_controller->storiesAddToAlbumId()) {
 	style::PaletteChanged(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		for (auto &layout : _layouts) {
 			layout.second.item->invalidateCache();
 		}
@@ -121,7 +123,7 @@ void Provider::refreshViewer() {
 	auto &manager = Core::App().downloadManager();
 	rpl::single(rpl::empty) | rpl::then(
 		manager.loadingListChanges() | rpl::to_empty
-	) | rpl::start_with_next([=, &manager] {
+	) | rpl::on_next([=, &manager] {
 		auto copy = _downloading;
 		for (const auto id : manager.loadingList()) {
 			if (!id->done) {
@@ -152,12 +154,12 @@ void Provider::refreshViewer() {
 	}
 
 	manager.loadedAdded(
-	) | rpl::start_with_next([=](not_null<const Data::DownloadedId*> entry) {
+	) | rpl::on_next([=](not_null<const Data::DownloadedId*> entry) {
 		addPostponed(entry);
 	}, _lifetime);
 
 	manager.loadedRemoved(
-	) | rpl::start_with_next([=](not_null<const HistoryItem*> item) {
+	) | rpl::on_next([=](not_null<const HistoryItem*> item) {
 		if (!_downloading.contains(item)) {
 			remove(item);
 		} else {
@@ -169,7 +171,7 @@ void Provider::refreshViewer() {
 	}, _lifetime);
 
 	manager.loadedResolveDone(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		if (!_fullCount.has_value()) {
 			_fullCount = 0;
 		}
@@ -281,12 +283,12 @@ void Provider::trackItemSession(not_null<const HistoryItem*> item) {
 	auto &lifetime = _trackedSessions.emplace(session).first->second;
 
 	session->data().itemRemoved(
-	) | rpl::start_with_next([this](auto item) {
+	) | rpl::on_next([this](auto item) {
 		itemRemoved(item);
 	}, lifetime);
 
 	session->account().sessionChanges(
-	) | rpl::take(1) | rpl::start_with_next([=] {
+	) | rpl::take(1) | rpl::on_next([=] {
 		_trackedSessions.remove(session);
 	}, lifetime);
 }
@@ -485,6 +487,9 @@ void Provider::applyDragSelection(
 		return;
 	}
 	const auto search = !_queryWords.isEmpty();
+	const auto selectLimit = _storiesAddToAlbumId
+		? _controller->session().appConfig().storiesAlbumLimit()
+		: MaxSelectedItems;
 	auto chosen = base::flat_set<not_null<const HistoryItem*>>();
 	chosen.reserve(till - from);
 	for (auto i = from; i != till; ++i) {
@@ -496,7 +501,8 @@ void Provider::applyDragSelection(
 		ChangeItemSelection(
 			selected,
 			item,
-			computeSelectionData(item, FullSelection));
+			computeSelectionData(item, FullSelection),
+			selectLimit);
 	}
 	if (selected.size() != chosen.size()) {
 		for (auto i = begin(selected); i != end(selected);) {

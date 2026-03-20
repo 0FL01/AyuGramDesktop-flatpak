@@ -20,6 +20,9 @@
 #include <QDesktopServices>
 
 #include "main/main_session.h"
+#include "ui/boxes/donate_info_box.h"
+#include "ui/settings/settings_main.h"
+#include "window/window_controller.h"
 
 namespace AyuUrlHandlers {
 
@@ -43,13 +46,51 @@ bool ResolveUser(
 		return true;
 	}
 
-	searchById(
+	searchUserById(
 		userId,
 		&controller->session(),
-		[=](const QString &title, UserData *data)
+		[=](const QString &title, PeerData *data)
 		{
 			if (data) {
 				controller->showPeerInfo(data);
+				return;
+			}
+
+			Core::App().hideMediaView();
+			Ui::show(Ui::MakeInformBox(tr::ayu_UserNotFoundMessage()));
+		}
+	);
+
+	return true;
+}
+
+bool ResolveChat(
+	Window::SessionController *controller,
+	const Match &match,
+	const QVariant &context) {
+	if (!controller) {
+		return false;
+	}
+	const auto params = url_parse_params(
+		match->captured(1),
+		qthelp::UrlParamNameTransform::ToLower);
+	const auto chatId = params.value(qsl("id")).toLongLong();
+	if (!chatId) {
+		return false;
+	}
+	const auto peer = controller->session().data().peerLoaded(static_cast<PeerId>(chatId));
+	if (peer != nullptr) {
+		controller->showPeerHistory(peer);
+		return true;
+	}
+
+	searchChatById(
+		chatId,
+		&controller->session(),
+		[=](const QString &title, PeerData *data)
+		{
+			if (data) {
+				controller->showPeerHistory(data);
 				return;
 			}
 
@@ -68,7 +109,40 @@ bool HandleAyu(
 	if (!controller) {
 		return false;
 	}
-	controller->showToast(QString(":3"), 500);
+
+	try {
+		const auto section = match->captured(1).mid(1).toLower();
+		const auto type = [&]() -> std::optional<::Settings::Type>
+		{
+			if (section == u"settings"_q || section == u"preferences"_q || section == u"prefs"_q) {
+				return ::Settings::AyuMain::Id();
+			}
+			return std::nullopt;
+		}();
+
+		if (type.has_value()) {
+			controller->showSettings(*type);
+			controller->window().activate();
+		} else {
+			controller->showToast(QString(":3"), 500);
+		}
+	} catch (...) {
+	}
+
+	return true;
+}
+
+bool HandleSupport(
+	Window::SessionController *controller,
+	const Match &match,
+	const QVariant &context) {
+	if (!controller) {
+		return false;
+	}
+	auto box = Box(
+		Ui::FillDonateInfoBox,
+		controller);
+	Ui::show(std::move(box));
 	return true;
 }
 

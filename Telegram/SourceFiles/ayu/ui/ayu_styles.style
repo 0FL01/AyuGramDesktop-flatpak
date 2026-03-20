@@ -12,7 +12,7 @@ using "ui/colors.palette";
 using "ui/widgets/widgets.style";
 using "info/info.style";
 
-/* Color Picker */
+/* Icon Picker */
 cpPadding: 14px;
 cpSelectedPadding: 2px;
 cpSelectedRounding: 12px;
@@ -63,9 +63,28 @@ topBarRecentActions: IconButton {
 }
 
 exteraBadgeToast: Toast(defaultToast) {
-	minWidth: msgMinWidth;
+	minWidth: 40px;
 	maxWidth: 480px;
 	padding: margins(54px, 13px, 19px, 12px);
 	icon: icon {{ "ayu/extera_badge", toastFg }};
 	iconPosition: point(13px, 13px);
+}
+
+supportLogoSize: 96px;
+
+unreadPillPadding: 12px;
+
+infoProfileLabeledButtonRegistrationDate: IconButton(defaultIconButton) {
+	width: 34px;
+	height: 34px;
+	icon: icon {{ "menu/calendar", windowActiveTextFg }};
+	iconOver: icon {{ "menu/calendar", windowActiveTextFg }};
+	rippleAreaPosition: point(0px, 0px);
+	rippleAreaSize: 34px;
+	ripple: defaultRippleAnimation;
+}
+registrationDateImportantTooltipLabel: FlatLabel(defaultImportantTooltipLabel) {
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
 }

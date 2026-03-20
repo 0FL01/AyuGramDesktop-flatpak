@@ -22,7 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
-
+#include "ayu/features/filters/shadow_ban_utils.h"
 
 namespace HistoryView {
 namespace {
@@ -72,6 +72,9 @@ bool SendActionPainter::updateNeedsAnimating(
 		if (user->isBlocked()) {
 			return false;
 		}
+	}
+	if (ShadowBanUtils::isShadowBanned(user->id.value & PeerId::kChatTypeMask)) {
+		return false;
 	}
 
 	const auto now = crl::now();
@@ -142,6 +145,7 @@ bool SendActionPainter::updateNeedsAnimating(
 		Unexpected("EmojiInteraction here.");
 	}, [&](const MTPDsendMessageEmojiInteractionSeen &) {
 		// #TODO interaction
+	}, [&](const MTPDsendMessageTextDraftAction &) {
 	}, [&](const MTPDsendMessageCancelAction &) {
 		Unexpected("CancelAction here.");
 	});
@@ -397,14 +401,17 @@ bool SendActionPainter::updateNeedsAnimating(crl::time now, bool force) {
 	if (force
 		|| sendActionChanged
 		|| (sendActionResult && !anim::Disabled())) {
-		const auto height = std::max(
-			st::normalFont->height,
-			st::dialogsMiniPreviewTop + st::dialogsMiniPreview);
+		const auto left = 0;
+		const auto top = Ui::Emoji::GetCustomSkipNormal();
+		const auto width = _sendActionAnimation.width() + _animationLeft;
+		const auto height = std::max({
+			st::normalFont->height - top,
+			st::dialogsMiniPreviewTop + st::dialogsMiniPreview - top,
+			Ui::Emoji::GetCustomSizeNormal(),
+		});
 		_history->peer->owner().sendActionManager().updateAnimation({
 			_topic ? ((Data::Thread*)_topic) : _history,
-			0,
-			_sendActionAnimation.width() + _animationLeft,
-			height,
+			{ left, top, width, height },
 			(force || sendActionChanged)
 		});
 	}

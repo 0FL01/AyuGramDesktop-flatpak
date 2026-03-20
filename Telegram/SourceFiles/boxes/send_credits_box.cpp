@@ -109,9 +109,9 @@ void AddTerms(
 				tr::lng_paid_react_agree_link(),
 				tr::lng_group_invite_subscription_about_url()
 			) | rpl::map([](const QString &text, const QString &url) {
-				return Ui::Text::Link(text, url);
+				return tr::link(text, url);
 			}),
-			Ui::Text::RichLangValue),
+			tr::rich),
 		st::inviteLinkSubscribeBoxTerms);
 	const auto &buttonPadding = stBox.buttonPadding;
 	const auto style = box->lifetime().make_state<style::Box>(style::Box{
@@ -125,7 +125,7 @@ void AddTerms(
 		.shadowIgnoreTopSkip = stBox.shadowIgnoreTopSkip,
 		.shadowIgnoreBottomSkip = stBox.shadowIgnoreBottomSkip,
 	});
-	button->geometryValue() | rpl::start_with_next([=](const QRect &rect) {
+	button->geometryValue() | rpl::on_next([=](const QRect &rect) {
 		terms->resizeToWidth(box->width()
 			- rect::m::sum::h(st::boxRowPadding));
 		terms->moveToLeft(
@@ -153,25 +153,25 @@ void AddTerms(
 		auto photosBold = tr::lng_credits_box_out_photos(
 			lt_count,
 			rpl::single(photos) | tr::to_count(),
-			Ui::Text::Bold);
+			tr::bold);
 		auto videosBold = tr::lng_credits_box_out_videos(
 			lt_count,
 			rpl::single(videos) | tr::to_count(),
-			Ui::Text::Bold);
+			tr::bold);
 		auto media = (!videos)
 				? ((photos > 1)
 					? std::move(photosBold)
-					: tr::lng_credits_box_out_photo(Ui::Text::WithEntities))
+					: tr::lng_credits_box_out_photo(tr::marked))
 				: (!photos)
 				? ((videos > 1)
 					? std::move(videosBold)
-					: tr::lng_credits_box_out_video(Ui::Text::WithEntities))
+					: tr::lng_credits_box_out_video(tr::marked))
 				: tr::lng_credits_box_out_both(
 					lt_photo,
 					std::move(photosBold),
 					lt_video,
 					std::move(videosBold),
-					Ui::Text::WithEntities);
+					tr::marked);
 		if (const auto user = data.peer->asUser()) {
 			return tr::lng_credits_box_out_media_user(
 				lt_count,
@@ -179,8 +179,8 @@ void AddTerms(
 				lt_media,
 				std::move(media),
 				lt_user,
-				rpl::single(Ui::Text::Bold(user->shortName())),
-				Ui::Text::RichLangValue);
+				rpl::single(tr::bold(user->shortName())),
+				tr::rich);
 		}
 		return tr::lng_credits_box_out_media(
 			lt_count,
@@ -188,8 +188,8 @@ void AddTerms(
 			lt_media,
 			std::move(media),
 			lt_chat,
-			rpl::single(Ui::Text::Bold(data.peer->name())),
-			Ui::Text::RichLangValue);
+			rpl::single(tr::bold(data.peer->name())),
+			tr::rich);
 	}
 
 	const auto bot = session->data().user(form->botId);
@@ -203,7 +203,7 @@ void AddTerms(
 			rpl::single(TextWithEntities{ form->title }),
 			lt_recipient,
 			rpl::single(TextWithEntities{ bot->name() }),
-			Ui::Text::RichLangValue);
+			tr::rich);
 	}
 	return tr::lng_credits_box_out_sure(
 		lt_count,
@@ -212,7 +212,7 @@ void AddTerms(
 		rpl::single(TextWithEntities{ form->title }),
 		lt_bot,
 		rpl::single(TextWithEntities{ bot->name() }),
-		Ui::Text::RichLangValue);
+		tr::rich);
 }
 
 [[nodiscard]] object_ptr<Ui::RpWidget> SendCreditsThumbnail(
@@ -266,7 +266,7 @@ void AddTerms(
 	const auto radius = smaller.height() / 2.;
 	widget->resize(size);
 
-	widget->paintRequest() | rpl::start_with_next([=] {
+	widget->paintRequest() | rpl::on_next([=] {
 		auto p = QPainter(widget);
 		auto hq = PainterHighQualityEnabler(p);
 		p.setPen(QPen(st::premiumButtonFg, st::chatGiveawayBadgeStroke * 1.));
@@ -331,13 +331,13 @@ void SendCreditsBox(
 		ministars->setColorOverride(Ui::Premium::CreditsIconGradientStops());
 
 		ministarsContainer->paintRequest(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			auto p = QPainter(ministarsContainer);
 			ministars->paint(p);
 		}, ministarsContainer->lifetime());
 
 		box->widthValue(
-		) | rpl::start_with_next([=](int width) {
+		) | rpl::on_next([=](int width) {
 			ministarsContainer->resize(width, fullHeight);
 			const auto w = fullHeight / 3 * 2;
 			ministars->setCenter(QRect(
@@ -348,13 +348,13 @@ void SendCreditsBox(
 		}, ministarsContainer->lifetime());
 	}
 
-	const auto thumb = box->addRow(object_ptr<Ui::CenterWrap<>>(
-		content,
-		SendCreditsThumbnail(content, session, form.get(), photoSize)));
+	const auto thumb = box->addRow(
+		SendCreditsThumbnail(content, session, form.get(), photoSize),
+		style::al_top);
 	thumb->setAttribute(Qt::WA_TransparentForMouseEvents);
 	if (form->invoice.subscriptionPeriod) {
 		const auto badge = SendCreditsBadge(content, form->invoice.amount);
-		thumb->geometryValue() | rpl::start_with_next([=](const QRect &r) {
+		thumb->geometryValue() | rpl::on_next([=](const QRect &r) {
 			badge->moveToLeft(
 				r.x() + (r.width() - badge->width()) / 2,
 				rect::bottom(r) - badge->height() / 2);
@@ -364,31 +364,30 @@ void SendCreditsBox(
 	}
 
 	Ui::AddSkip(content);
-	box->addRow(object_ptr<Ui::CenterWrap<>>(
-		box,
+	box->addRow(
 		object_ptr<Ui::FlatLabel>(
 			box,
 			form->invoice.subscriptionPeriod
 				? rpl::single(form->title)
 				: tr::lng_credits_box_out_title(),
-			st::settingsPremiumUserTitle)));
+			st::settingsPremiumUserTitle),
+		style::al_top);
 	if (form->invoice.subscriptionPeriod && form->botId && form->photo) {
 		Ui::AddSkip(content);
 		Ui::AddSkip(content);
 		const auto bot = session->data().user(form->botId);
 		box->addRow(
-			object_ptr<Ui::CenterWrap<>>(
-				box,
-				Ui::CreatePeerBubble(box, bot)));
+			Ui::CreatePeerBubble(box, bot),
+			style::al_top);
 		Ui::AddSkip(content);
 	}
 	Ui::AddSkip(content);
-	box->addRow(object_ptr<Ui::CenterWrap<>>(
-		box,
+	box->addRow(
 		object_ptr<Ui::FlatLabel>(
 			box,
 			SendCreditsConfirmText(session, form.get()),
-			st::creditsBoxAbout)));
+			st::creditsBoxAbout),
+		style::al_top);
 	Ui::AddSkip(content);
 	Ui::AddSkip(content);
 
@@ -397,7 +396,7 @@ void SendCreditsBox(
 			return;
 		}
 		const auto show = box->uiShow();
-		const auto weak = MakeWeak(box.get());
+		const auto weak = base::make_weak(box.get());
 		state->confirmButtonBusy = true;
 		session->api().request(
 			MTPpayments_SendStarsForm(
@@ -421,8 +420,8 @@ void SendCreditsBox(
 			if (id == u"BOT_PRECHECKOUT_FAILED"_q) {
 				auto error = ::Ui::MakeInformBox(
 					tr::lng_payments_precheckout_stars_failed(tr::now));
-				error->boxClosing() | rpl::start_with_next([=] {
-					if (const auto paybox = weak.data()) {
+				error->boxClosing() | rpl::on_next([=] {
+					if (const auto paybox = weak.get()) {
 						paybox->closeBox();
 					}
 				}, error->lifetime());
@@ -455,8 +454,8 @@ void SendCreditsBox(
 					lt_count,
 					rpl::single(form->invoice.amount) | tr::to_count(),
 					lt_emoji,
-					rpl::single(CreditsEmojiSmall(session)),
-					Ui::Text::RichLangValue),
+					rpl::single(CreditsEmojiSmall()),
+					tr::rich),
 			state->confirmButtonBusy.value()
 		) | rpl::map([](TextWithEntities &&text, bool busy) {
 			return busy ? TextWithEntities() : std::move(text);
@@ -465,20 +464,12 @@ void SendCreditsBox(
 		st::creditsBoxButtonLabel,
 		&box->getDelegate()->style().button.textFg);
 
-	const auto buttonWidth = st::boxWidth
-		- rect::m::sum::h(stBox.buttonPadding);
-	button->widthValue() | rpl::filter([=] {
-		return (button->widthNoMargins() != buttonWidth);
-	}) | rpl::start_with_next([=] {
-		button->resizeToWidth(buttonWidth);
-	}, button->lifetime());
-
 	{
 		const auto close = Ui::CreateChild<Ui::IconButton>(
 			content,
 			st::boxTitleClose);
 		close->setClickedCallback([=] { box->closeBox(); });
-		content->widthValue() | rpl::start_with_next([=](int) {
+		content->widthValue() | rpl::on_next([=](int) {
 			close->moveToRight(0, 0);
 		}, close->lifetime());
 	}
@@ -493,7 +484,7 @@ void SendCreditsBox(
 		rpl::combine(
 			balance->sizeValue(),
 			content->sizeValue()
-		) | rpl::start_with_next([=](const QSize &, const QSize &) {
+		) | rpl::on_next([=](const QSize &, const QSize &) {
 			balance->moveToLeft(
 				st::creditsHistoryRightSkip * 2,
 				st::creditsHistoryRightSkip);
@@ -502,16 +493,13 @@ void SendCreditsBox(
 	}
 }
 
-TextWithEntities CreditsEmoji(not_null<Main::Session*> session) {
-	return Ui::Text::SingleCustomEmoji(
-		session->data().customEmojiManager().registerInternalEmoji(
-			st::settingsPremiumIconStar,
-			QMargins{ 0, -st::moderateBoxExpandInnerSkip, 0, 0 },
-			true),
+TextWithEntities CreditsEmoji() {
+	return Ui::Text::IconEmoji(
+		&st::starIconEmojiLarge,
 		QString(QChar(0x2B50)));
 }
 
-TextWithEntities CreditsEmojiSmall(not_null<Main::Session*> session) {
+TextWithEntities CreditsEmojiSmall() {
 	return Ui::Text::IconEmoji(
 		&st::starIconEmoji,
 		QString(QChar(0x2B50)));
@@ -532,17 +520,17 @@ not_null<FlatLabel*> SetButtonMarkedLabel(
 		text
 	) | rpl::filter([=](const TextWithEntities &text) {
 		return !text.text.isEmpty();
-	}) | rpl::start_with_next([=](const TextWithEntities &text) {
+	}) | rpl::on_next([=](const TextWithEntities &text) {
 		buttonLabel->setMarkedText(text, context);
 	}, buttonLabel->lifetime());
 	if (textFg) {
 		buttonLabel->setTextColorOverride((*textFg)->c);
-		style::PaletteChanged() | rpl::start_with_next([=] {
+		style::PaletteChanged() | rpl::on_next([=] {
 			buttonLabel->setTextColorOverride((*textFg)->c);
 		}, buttonLabel->lifetime());
 	}
 	button->sizeValue(
-	) | rpl::start_with_next([=](const QSize &size) {
+	) | rpl::on_next([=](const QSize &size) {
 		buttonLabel->moveToLeft(
 			(size.width() - buttonLabel->width()) / 2,
 			(size.height() - buttonLabel->height()) / 2);

@@ -11,6 +11,7 @@
 - Кастомизация шрифта
 - Режим Стримера
 - Локальный телеграм премиум
+- Переводчик
 - Превью медиа и быстрая реакция при сильном нажатии на тачпад (macOS)
 - Улучшенный вид
 
@@ -18,11 +19,18 @@
 
 <h3>
   <details>
-    <summary>Скриншоты настроек</summary>
-    <img src='.github/demos/demo1.png' width='268'>
-    <img src='.github/demos/demo2.png' width='268'>
-    <img src='.github/demos/demo3.png' width='268'>
-    <img src='.github/demos/demo4.png' width='268'>
+    <summary>Превью</summary>
+    <table>
+      <tr>
+        <td><img src='.github/demos/demo1.png' width='268' alt='Preferences'></td>
+        <td><img src='.github/demos/demo2.png' width='268' alt='AyuGram Options'></td>
+        <td><img src='.github/demos/demo3.png' width='268' alt='Message Filters'></td>
+      </tr>
+      <tr>
+        <td><img src='.github/demos/demo4.png' width='268' alt='Appearance'></td>
+        <td><img src='.github/demos/demo5.png' width='268' alt='Chats'></td>
+      </tr>
+    </table>
   </details>
 </h3>
 
@@ -85,13 +93,19 @@ brew install --cask ayugram
 
 [Sisyphus](https://packages.altlinux.org/en/sisyphus/srpms/ayugram-desktop/)
 
+### Gentoo Linux
+
+Инструкцию по установке можно найти в [этом репозитории](https://github.com/OverLessArtem/ayugram-ebuild-gentoo).
+
 ### EPM
 
 `epm play ayugram`
 
 ### Любой другой Линукс дистрибутив
 
-Следуйте [официальному руководству](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
+Flatpak: https://github.com/0FL01/AyuGramDesktop-flatpak
+
+Или следуйте [официальному руководству](https://github.com/AyuGram/AyuGramDesktop/blob/dev/docs/building-linux.md).
 
 ### Примечания для Windows
 

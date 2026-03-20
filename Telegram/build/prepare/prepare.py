@@ -87,8 +87,6 @@ pathPrefixes = [
     'ThirdParty\\gyp',
 ] if win else [
     'ThirdParty/gyp',
-    'ThirdParty/yasm',
-    'ThirdParty/depot_tools',
 ]
 pathPrefix = ''
 for singlePrefix in pathPrefixes:
@@ -456,7 +454,7 @@ if customRunCommand:
 stage('patches', """
     git clone https://github.com/desktop-app/patches.git
     cd patches
-    git checkout 1ffcb17817a2cab167061d530703842395291e69
+    git checkout 859556cab51d17585ff76d3db62ff1c7502bc850
 """)
 
 stage('msys64', """
@@ -467,7 +465,7 @@ win:
     SET CHERE_INVOKING=enabled_from_arguments
     SET MSYS2_PATH_TYPE=inherit
 
-    powershell -Command "iwr -OutFile ./msys64.exe https://github.com/msys2/msys2-installer/releases/download/2025-02-21/msys2-base-x86_64-20250221.sfx.exe"
+    powershell -Command "iwr -OutFile ./msys64.exe https://github.com/msys2/msys2-installer/releases/download/2025-08-30/msys2-base-x86_64-20250830.sfx.exe"
     msys64.exe
     del msys64.exe
 
@@ -478,8 +476,7 @@ win:
         mingw-w64-x86_64-gperf ^
         mingw-w64-x86_64-nasm ^
         mingw-w64-x86_64-perl ^
-        mingw-w64-x86_64-pkgconf ^
-        mingw-w64-x86_64-yasm
+        mingw-w64-x86_64-pkgconf
 
     SET PATH=%PATH_BACKUP_%
 """, 'ThirdParty')
@@ -506,33 +503,17 @@ win:
     del jom.zip
 """, 'ThirdParty')
 
-stage('depot_tools', """
-mac:
-    git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-    cd depot_tools
-    ./update_depot_tools
-""", 'ThirdParty')
-
 if not mac or 'build-stackwalk' in options:
     stage('gyp', """
 win:
     git clone https://github.com/desktop-app/gyp.git
     cd gyp
-    git checkout 618958fdbe
+    git checkout 5e2425c47b
 mac:
     python3 -m pip install \\
         --ignore-installed \\
         --target=$THIRDPARTY_DIR/gyp \\
-        git+https://chromium.googlesource.com/external/gyp@master
-""", 'ThirdParty')
-
-stage('yasm', """
-mac:
-    git clone https://github.com/yasm/yasm.git
-    cd yasm
-    git checkout 41762bea
-    ./autogen.sh
-    make $MAKE_THREADS_CNT
+        git+https://chromium.googlesource.com/external/gyp@master six
 """, 'ThirdParty')
 
 stage('lzma', """
@@ -718,9 +699,9 @@ release:
 
 stage('libiconv', """
 mac:
-    VERSION=1.17
+    VERSION=1.18
     rm -f libiconv.tar.gz
-    wget -O libiconv.tar.gz ftp://ftp.gnu.org/gnu/libiconv/libiconv-$VERSION.tar.gz
+    wget --timeout=30 --tries=2 -O libiconv.tar.gz ftp://ftp.gnu.org/gnu/libiconv/libiconv-$VERSION.tar.gz || wget -O libiconv.tar.gz https://ftp.gnu.org/pub/gnu/libiconv/libiconv-$VERSION.tar.gz
     rm -rf libiconv-$VERSION
     tar -xvzf libiconv.tar.gz
     rm libiconv.tar.gz
@@ -995,6 +976,7 @@ win:
         -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
         -DBUILD_SHARED_LIBS=OFF ^
+        -DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON ^
         -DBUILD_TESTING=OFF ^
         -DENABLE_PLUGIN_LOADING=OFF ^
         -DWITH_LIBDE265=ON ^
@@ -1019,6 +1001,7 @@ mac:
         -D CMAKE_OSX_DEPLOYMENT_TARGET:STRING=$MACOSX_DEPLOYMENT_TARGET \\
         -D CMAKE_INSTALL_PREFIX:STRING=$USED_PREFIX \\
         -D BUILD_SHARED_LIBS=OFF \\
+        -D CMAKE_DISABLE_FIND_PACKAGE_Doxygen=ON \\
         -D BUILD_TESTING=OFF \\
         -D ENABLE_PLUGIN_LOADING=OFF \\
         -D WITH_AOM_ENCODER=OFF \\
@@ -1114,7 +1097,6 @@ depends:patches/build_libvpx_win.sh
 mac:
     find ../patches/libvpx -type f -print0 | sort -z | xargs -0 git apply
 
-depends:yasm/yasm
     ./configure --prefix=$USED_PREFIX \
     --target=arm64-darwin20-gcc \
     --disable-examples \
@@ -1221,7 +1203,6 @@ depends:patches/build_ffmpeg_win.sh
     SET PATH=%PATH_BACKUP_%
 mac:
     export PKG_CONFIG_PATH=$USED_PREFIX/lib/pkgconfig
-depends:yasm/yasm
 
     configureFFmpeg() {
         arch=$1
@@ -1652,7 +1633,7 @@ mac:
     make install
 """)
 else: # qt > '6'
-    branch = 'v$QT' + ('-lts-lgpl' if qt < '6.3' else '')
+    branch = 'v$QT' + ('-lts-lgpl' if qt.startswith('6.2.') else '')
     stage('qt_' + qt, """
     git clone -b """ + branch + """ https://github.com/qt/qt5.git qt_$QT
     cd qt_$QT
@@ -1681,8 +1662,6 @@ mac:
         -I "$USED_PREFIX/include" \
         -no-feature-futimens \
         -no-feature-brotli \
-        -nomake examples \
-        -nomake tests \
         -platform macx-clang -- \
         -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
         -DCMAKE_PREFIX_PATH="$USED_PREFIX"
@@ -1712,13 +1691,10 @@ win:
         -static ^
         -static-runtime ^
         -feature-c++20 ^
-        -no-sbom ^
         -openssl linked ^
         -system-webp ^
         -system-zlib ^
         -system-libjpeg ^
-        -nomake examples ^
-        -nomake tests ^
         -platform win32-msvc ^
         -D ZLIB_WINAPI ^
         -- ^
@@ -1755,7 +1731,7 @@ win:
 stage('tg_owt', """
     git clone https://github.com/desktop-app/tg_owt.git
     cd tg_owt
-    git checkout 62321fd
+    git checkout 5c5c71258777d0196dbb3a09cc37d2f56ead28ab
     git submodule update --init --recursive
 win:
     SET MOZJPEG_PATH=$LIBS_DIR/mozjpeg

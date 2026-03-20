@@ -32,6 +32,7 @@ struct ListItemSelectionData {
 	bool canForward = false;
 	bool canToggleStoryPin = false;
 	bool canUnpinStory = false;
+	bool storyInProfile = false;
 
 	friend inline bool operator==(
 		ListItemSelectionData,
@@ -54,6 +55,7 @@ struct ListContext {
 	not_null<ListSelectedMap*> selected;
 	not_null<ListSelectedMap*> dragSelected;
 	ListDragSelectAction dragSelectAction = ListDragSelectAction::None;
+	BaseLayout *draggedItem = nullptr;
 };
 
 struct ListScrollTopState {
@@ -66,6 +68,11 @@ struct ListFoundItem {
 	not_null<BaseLayout*> layout;
 	QRect geometry;
 	bool exact = false;
+};
+
+struct ListFoundItemWithSection {
+	ListFoundItem item;
+	not_null<const ListSection*> section;
 };
 
 struct CachedItem {
@@ -90,7 +97,8 @@ using UniversalMsgId = MsgId;
 bool ChangeItemSelection(
 	ListSelectedMap &selected,
 	not_null<const HistoryItem*> item,
-	ListItemSelectionData selectionData);
+	ListItemSelectionData selectionData,
+	int limit = 0);
 
 class ListSectionDelegate {
 public:

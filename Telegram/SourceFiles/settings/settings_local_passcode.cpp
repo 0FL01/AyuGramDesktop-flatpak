@@ -101,7 +101,7 @@ void LocalPasscodeEnter::setupContent() {
 
 	base::SystemUnlockStatus(
 		true
-	) | rpl::start_with_next([=](base::SystemUnlockAvailability status) {
+	) | rpl::on_next([=](base::SystemUnlockAvailability status) {
 		_systemUnlockWithBiometric = status.available
 			&& status.withBiometrics;
 	}, lifetime());
@@ -114,15 +114,12 @@ void LocalPasscodeEnter::setupContent() {
 		content,
 		{
 			.name = u"local_passcode_enter"_q,
-			.sizeOverride = {
-				st::changePhoneIconSize,
-				st::changePhoneIconSize,
-			},
+			.sizeOverride = st::normalBoxLottieSize,
 		},
 		st::settingLocalPasscodeIconPadding);
 	content->add(std::move(icon.widget));
 	_showFinished.events(
-	) | rpl::start_with_next([animate = std::move(icon.animate)] {
+	) | rpl::on_next([animate = std::move(icon.animate)] {
 		animate(anim::repeat::once);
 	}, content->lifetime());
 
@@ -136,25 +133,24 @@ void LocalPasscodeEnter::setupContent() {
 	Ui::AddSkip(content);
 
 	content->add(
-		object_ptr<Ui::CenterWrap<>>(
+		object_ptr<Ui::FlatLabel>(
 			content,
-			object_ptr<Ui::FlatLabel>(
-				content,
-				isCreate
-					? tr::lng_passcode_create_title()
-					: isCheck
-					? tr::lng_passcode_check_title()
-					: tr::lng_passcode_change_title(),
-				st::changePhoneTitle)),
-		st::changePhoneTitlePadding);
+			isCreate
+				? tr::lng_passcode_create_title()
+				: isCheck
+				? tr::lng_passcode_check_title()
+				: tr::lng_passcode_change_title(),
+			st::changePhoneTitle),
+		st::changePhoneTitlePadding,
+		style::al_top);
 
 	const auto addDescription = [&](rpl::producer<QString> &&text) {
 		const auto &st = st::settingLocalPasscodeDescription;
 		content->add(
-			object_ptr<Ui::CenterWrap<>>(
-				content,
-				object_ptr<Ui::FlatLabel>(content, std::move(text), st)),
-			st::changePhoneDescriptionPadding);
+			object_ptr<Ui::FlatLabel>(content, std::move(text), st),
+			st::changePhoneDescriptionPadding,
+			style::al_top
+		)->setTryMakeSimilarLines(true);
 	};
 
 	addDescription(tr::lng_passcode_about1());
@@ -173,7 +169,7 @@ void LocalPasscodeEnter::setupContent() {
 			std::move(text));
 
 		container->geometryValue(
-		) | rpl::start_with_next([=](const QRect &r) {
+		) | rpl::on_next([=](const QRect &r) {
 			field->moveToLeft((r.width() - field->width()) / 2, 0);
 		}, container->lifetime());
 
@@ -183,14 +179,13 @@ void LocalPasscodeEnter::setupContent() {
 
 	const auto addError = [&](not_null<Ui::PasswordInput*> input) {
 		const auto error = content->add(
-			object_ptr<Ui::CenterWrap<Ui::FlatLabel>>(
+			object_ptr<Ui::FlatLabel>(
 				content,
-				object_ptr<Ui::FlatLabel>(
-					content,
-					// Set any text to resize.
-					tr::lng_language_name(tr::now),
-					st::settingLocalPasscodeError)),
-			st::changePhoneDescriptionPadding)->entity();
+				// Set any text to resize.
+				tr::lng_language_name(tr::now),
+				st::settingLocalPasscodeError),
+			st::changePhoneDescriptionPadding,
+			style::al_top);
 		error->hide();
 		QObject::connect(input.get(), &Ui::MaskedInputField::changed, [=] {
 			error->hide();
@@ -208,17 +203,16 @@ void LocalPasscodeEnter::setupContent() {
 	const auto error = addError(isCheck ? newPasscode : reenterPasscode);
 
 	const auto button = content->add(
-		object_ptr<Ui::CenterWrap<Ui::RoundButton>>(
+		object_ptr<Ui::RoundButton>(
 			content,
-			object_ptr<Ui::RoundButton>(
-				content,
-				(isCreate
-					? tr::lng_passcode_create_button()
-					: isCheck
-					? tr::lng_passcode_check_button()
-					: tr::lng_passcode_change_button()),
-				st::changePhoneButton)),
-		st::settingLocalPasscodeButtonPadding)->entity();
+			(isCreate
+				? tr::lng_passcode_create_button()
+				: isCheck
+				? tr::lng_passcode_check_button()
+				: tr::lng_passcode_change_button()),
+			st::changePhoneButton),
+		st::settingLocalPasscodeButtonPadding,
+		style::al_top);
 	button->setTextTransform(Ui::RoundButton::TextTransform::NoTransform);
 	button->setClickedCallback([=] {
 		const auto newText = newPasscode->text();
@@ -299,7 +293,7 @@ void LocalPasscodeEnter::setupContent() {
 	}
 
 	_setInnerFocus.events(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		if (newPasscode->text().isEmpty()) {
 			newPasscode->setFocus();
 		} else if (reenterPasscode && reenterPasscode->text().isEmpty()) {
@@ -404,7 +398,7 @@ public:
 
 	[[nodiscard]] rpl::producer<std::vector<Type>> removeFromStack() override;
 
-	[[nodiscard]] QPointer<Ui::RpWidget> createPinnedToBottom(
+	[[nodiscard]] base::weak_qptr<Ui::RpWidget> createPinnedToBottom(
 		not_null<Ui::RpWidget*> parent) override;
 
 private:
@@ -516,11 +510,11 @@ void LocalPasscodeManage::setupContent() {
 				st::boxDividerLabel),
 		st::defaultBoxDividerLabelPadding));
 	about->geometryValue(
-	) | rpl::start_with_next([=](const QRect &r) {
+	) | rpl::on_next([=](const QRect &r) {
 		divider->setGeometry(r);
 	}, divider->lifetime());
 	_isBottomFillerShown.value(
-	) | rpl::start_with_next([=](bool shown) {
+	) | rpl::on_next([=](bool shown) {
 		divider->skipEdge(Qt::BottomEdge, shown);
 	}, divider->lifetime());
 
@@ -552,7 +546,7 @@ void LocalPasscodeManage::setupContent() {
 	}));
 
 	unlockType->value(
-	) | rpl::start_with_next([=](UnlockType type) {
+	) | rpl::on_next([=](UnlockType type) {
 		while (systemUnlockContent->count()) {
 			delete systemUnlockContent->widgetAt(0);
 		}
@@ -581,7 +575,7 @@ void LocalPasscodeManage::setupContent() {
 		)->toggledChanges(
 		) | rpl::filter([=](bool value) {
 			return value != Core::App().settings().systemUnlockEnabled();
-		}) | rpl::start_with_next([=](bool value) {
+		}) | rpl::on_next([=](bool value) {
 			Core::App().settings().setSystemUnlockEnabled(value);
 			Core::App().saveSettingsDelayed();
 		}, systemUnlockContent->lifetime());
@@ -606,7 +600,7 @@ void LocalPasscodeManage::setupContent() {
 	Ui::ResizeFitChild(this, content);
 }
 
-QPointer<Ui::RpWidget> LocalPasscodeManage::createPinnedToBottom(
+base::weak_qptr<Ui::RpWidget> LocalPasscodeManage::createPinnedToBottom(
 		not_null<Ui::RpWidget*> parent) {
 	auto callback = [=] {
 		_controller->show(

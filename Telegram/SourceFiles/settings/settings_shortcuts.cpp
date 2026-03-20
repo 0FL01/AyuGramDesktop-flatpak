@@ -104,6 +104,9 @@ struct Labeled {
 		{ C::SendSilentMessage, tr::lng_shortcuts_silent_send() },
 		{ C::ScheduleMessage, tr::lng_shortcuts_schedule() },
 		separator,
+		{ C::RecordVoice, tr::lng_shortcuts_record_voice_message() },
+		{ C::RecordRound, tr::lng_shortcuts_record_round_message() },
+		separator,
 		{ C::MediaViewerFullscreen, tr::lng_shortcuts_media_fullscreen() },
 		separator,
 		{ C::MediaPlay, tr::lng_shortcuts_media_play() },
@@ -194,7 +197,7 @@ struct Labeled {
 	};
 	checkModified();
 
-	const auto menu = std::make_shared<QPointer<Ui::PopupMenu>>();
+	const auto menu = std::make_shared<base::weak_qptr<Ui::PopupMenu>>();
 	const auto fill = [=](Entry &entry) {
 		auto index = 0;
 		if (entry.original.empty()) {
@@ -228,7 +231,7 @@ struct Labeled {
 					button->key.value(),
 					state->recording.value(),
 					button->removed.value()
-				) | rpl::start_with_next([=](
+				) | rpl::on_next([=](
 						int width,
 						const QString &button,
 						const QKeySequence &key,
@@ -241,7 +244,7 @@ struct Labeled {
 						- st.style.font->width(button)
 						- st::settingsButtonRightSkip;
 					keys->setMarkedText((recording == raw)
-						? Ui::Text::Italic(
+						? tr::italic(
 							tr::lng_shortcuts_recording(tr::now))
 						: key.isEmpty()
 						? TextWithEntities()
@@ -264,7 +267,7 @@ struct Labeled {
 
 				widget->setAcceptBoth(true);
 				widget->clicks(
-				) | rpl::start_with_next([=](Qt::MouseButton button) {
+				) | rpl::on_next([=](Qt::MouseButton button) {
 					if (const auto strong = *menu) {
 						strong->hideMenu();
 						return;

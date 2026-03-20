@@ -71,12 +71,20 @@ void ProcessCreditsPayment(
 									tr::now,
 									lt_count_decimal,
 									form->starGiftLimitedCount,
-									Ui::Text::RichLangValue),
+									tr::rich),
 							});
 						} else {
 							show->showToast(
 								tr::lng_gift_sold_out_title(tr::now));
 						}
+					} else if (*error == u"STARGIFT_USER_USAGE_LIMITED"_q) {
+						show->showToast({
+							.text = tr::lng_gift_sent_finished(
+								tr::now,
+								lt_count,
+								std::max(form->starGiftPerUserLimit, 1),
+								tr::rich),
+						});
 					} else {
 						show->showToast(*error);
 					}
@@ -103,7 +111,7 @@ void ProcessCreditsPayment(
 					onstack(CheckoutResult::Paid);
 				}
 			}));
-		box->boxClosing() | rpl::start_with_next([=] {
+		box->boxClosing() | rpl::on_next([=] {
 			crl::on_main([=] {
 				if (*unsuccessful) {
 					if (const auto onstack = maybeReturnToBot) {

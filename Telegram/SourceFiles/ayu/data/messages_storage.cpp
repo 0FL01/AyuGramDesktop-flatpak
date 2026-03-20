@@ -6,7 +6,6 @@
 // Copyright @Radolyn, 2025
 #include "ayu/data/messages_storage.h"
 
-#include "ayu/ayu_constants.h"
 #include "ayu/data/ayu_database.h"
 #include "ayu/utils/ayu_mapper.h"
 #include "ayu/utils/telegram_helpers.h"
@@ -82,7 +81,7 @@ void map(not_null<HistoryItem*> item, AyuMessageBase &message) {
 	// todo: implement mapping
 	message.mediaPath = "/";
 	// message.hqThumbPath
-	message.documentType = DOCUMENT_TYPE_NONE;
+	message.documentType = 0; // document type none
 	// message.documentSerialized
 	// message.thumbsSerialized
 	// message.documentAttributesSerialized

@@ -274,7 +274,7 @@ InnerWidget::InnerWidget(
 	Window::ChatThemeValueFromPeer(
 		controller,
 		peer
-	) | rpl::start_with_next([=](std::shared_ptr<Ui::ChatTheme> &&theme)
+	) | rpl::on_next([=](std::shared_ptr<Ui::ChatTheme> &&theme)
 							 {
 								 _theme = std::move(theme);
 								 controller->setChatStyleTheme(_theme);
@@ -287,7 +287,7 @@ InnerWidget::InnerWidget(
 		scrollDateHideByTimer();
 	});
 	session().data().viewRepaintRequest(
-	) | rpl::start_with_next([=](auto view)
+	) | rpl::on_next([=](auto view)
 							 {
 								 if (view->delegate() == this) {
 									 repaintItem(view);
@@ -295,7 +295,7 @@ InnerWidget::InnerWidget(
 							 },
 							 lifetime());
 	session().data().viewResizeRequest(
-	) | rpl::start_with_next([=](auto view)
+	) | rpl::on_next([=](auto view)
 							 {
 								 if (view->delegate() == this) {
 									 resizeItem(view);
@@ -303,7 +303,7 @@ InnerWidget::InnerWidget(
 							 },
 							 lifetime());
 	session().data().itemViewRefreshRequest(
-	) | rpl::start_with_next([=](auto item)
+	) | rpl::on_next([=](auto item)
 							 {
 								 if (const auto view = viewForItem(item)) {
 									 refreshItem(view);
@@ -311,7 +311,7 @@ InnerWidget::InnerWidget(
 							 },
 							 lifetime());
 	session().data().viewLayoutChanged(
-	) | rpl::start_with_next([=](auto view)
+	) | rpl::on_next([=](auto view)
 							 {
 								 if (view->delegate() == this) {
 									 if (view->isUnderCursor()) {
@@ -321,7 +321,7 @@ InnerWidget::InnerWidget(
 							 },
 							 lifetime());
 	session().data().itemDataChanges(
-	) | rpl::start_with_next([=](not_null<HistoryItem*> item)
+	) | rpl::on_next([=](not_null<HistoryItem*> item)
 							 {
 								 if (const auto view = viewForItem(item)) {
 									 view->itemDataChanged();
@@ -334,7 +334,7 @@ InnerWidget::InnerWidget(
 		{
 			return (_history == query.item->history())
 				&& isVisible();
-		}) | rpl::start_with_next([=](
+		}) | rpl::on_next([=](
 								  const Data::Session::ItemVisibilityQuery &query)
 								  {
 									  if (const auto view = viewForItem(query.item)) {
@@ -349,7 +349,7 @@ InnerWidget::InnerWidget(
 								  lifetime());
 
 	controller->adaptive().chatWideValue(
-	) | rpl::start_with_next([=](bool wide)
+	) | rpl::on_next([=](bool wide)
 							 {
 								 _isChatWide = wide;
 							 },
@@ -784,7 +784,7 @@ void InnerWidget::itemsAdded(Direction direction, int addedCount) {
 }
 
 void InnerWidget::updateSize() {
-	TWidget::resizeToWidth(width());
+	RpWidget::resizeToWidth(width());
 	restoreScrollPosition();
 	updateVisibleTopItem();
 	checkPreloadMore();
@@ -1361,7 +1361,7 @@ void InnerWidget::mouseReleaseEvent(QMouseEvent *e) {
 
 void InnerWidget::enterEventHook(QEnterEvent *e) {
 	mouseActionUpdate(QCursor::pos());
-	return TWidget::enterEventHook(e);
+	return RpWidget::enterEventHook(e);
 }
 
 void InnerWidget::leaveEventHook(QEvent *e) {
@@ -1375,7 +1375,7 @@ void InnerWidget::leaveEventHook(QEvent *e) {
 		_cursor = style::cur_default;
 		setCursor(_cursor);
 	}
-	return TWidget::leaveEventHook(e);
+	return RpWidget::leaveEventHook(e);
 }
 
 void InnerWidget::mouseActionStart(const QPoint &screenPos, Qt::MouseButton button) {
@@ -1489,11 +1489,9 @@ void InnerWidget::mouseActionFinish(const QPoint &screenPos, Qt::MouseButton but
 							 {
 								 button,
 								 QVariant::fromValue(ClickHandlerContext{
-									 .elementDelegate = [weak = Ui::MakeWeak(this)]
+									 .elementDelegate = [weak = base::make_weak(this)]
 									 {
-										 return weak
-													? (ElementDelegate*) weak
-													: nullptr;
+										 return weak.get();
 									 },
 									 .sessionWindow = base::make_weak(_controller),
 								 })

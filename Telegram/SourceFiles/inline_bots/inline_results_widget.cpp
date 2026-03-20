@@ -53,18 +53,18 @@ Widget::Widget(
 	_inner->moveToLeft(0, 0, _scroll->width());
 
 	_scroll->scrolls(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		onScroll();
 	}, lifetime());
 
 	_inner->inlineRowsCleared(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		hideAnimated();
 		_inner->clearInlineRowsPanel();
 	}, lifetime());
 
 	style::PaletteChanged(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		_innerRounding = Ui::PrepareCornerPixmaps(
 			ImageRoundRadius::Large,
 			st::emojiPanBg);
@@ -73,14 +73,14 @@ Widget::Widget(
 	macWindowDeactivateEvents(
 	) | rpl::filter([=] {
 		return !isHidden();
-	}) | rpl::start_with_next([=] {
+	}) | rpl::on_next([=] {
 		leaveEvent(nullptr);
 	}, lifetime());
 
 	// Inner widget has OpaquePaintEvent attribute so it doesn't repaint on scroll.
 	// But we should force it to repaint so that GIFs will continue to animate without update() calls.
 	// We do that by creating a transparent widget above our _inner.
-	auto forceRepaintOnScroll = object_ptr<TWidget>(this);
+	auto forceRepaintOnScroll = object_ptr<RpWidget>(this);
 	forceRepaintOnScroll->setGeometry(innerRect().x() + st::roundRadiusSmall, innerRect().y() + st::roundRadiusSmall, st::roundRadiusSmall, st::roundRadiusSmall);
 	forceRepaintOnScroll->setAttribute(Qt::WA_TransparentForMouseEvents);
 	forceRepaintOnScroll->show();
@@ -465,8 +465,8 @@ void Widget::onInlineRequest() {
 	_requesting.fire(true);
 	_inlineRequestId = _api.request(MTPmessages_GetInlineBotResults(
 		MTP_flags(0),
-		_inlineBot->inputUser,
-		_inlineQueryPeer->input,
+		_inlineBot->inputUser(),
+		_inlineQueryPeer->input(),
 		MTPInputGeoPoint(),
 		MTP_string(_inlineQuery),
 		MTP_string(nextOffset)

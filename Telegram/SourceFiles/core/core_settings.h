@@ -247,6 +247,12 @@ public:
 	void setNotificationsCorner(ScreenCorner corner) {
 		_notificationsCorner = corner;
 	}
+	[[nodiscard]] int32 notificationsDisplayChecksum() const {
+		return _notificationsDisplayChecksum;
+	}
+	void setNotificationsDisplayChecksum(int32 checksum) {
+		_notificationsDisplayChecksum = checksum;
+	}
 	[[nodiscard]] bool includeMutedCounter() const {
 		return _includeMutedCounter;
 	}
@@ -956,6 +962,13 @@ public:
 	[[nodiscard]] Dialogs::Ui::QuickDialogAction quickDialogAction() const;
 	void setQuickDialogAction(Dialogs::Ui::QuickDialogAction);
 
+	[[nodiscard]] ushort notificationsVolume() const {
+		return _notificationsVolume;
+	}
+	void setNotificationsVolume(ushort value) {
+		_notificationsVolume = value;
+	}
+
 	void resetOnLastLogout();
 
 private:
@@ -987,6 +1000,7 @@ private:
 	bool _skipToastsInFocus = false;
 	int _notificationsCount = 3;
 	ScreenCorner _notificationsCorner = ScreenCorner::BottomRight;
+	int32 _notificationsDisplayChecksum = 0;
 	bool _includeMutedCounter = true;
 	bool _includeMutedCounterFolders = true;
 	bool _countUnreadMessages = true;
@@ -1098,6 +1112,8 @@ private:
 
 	Dialogs::Ui::QuickDialogAction _quickDialogAction
 		= Dialogs::Ui::QuickDialogAction::Disabled;
+
+	ushort _notificationsVolume = 100;
 
 	QByteArray _photoEditorBrush;
 

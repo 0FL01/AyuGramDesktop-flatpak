@@ -64,7 +64,7 @@ void EditMarkBox::prepare() {
 		submit();
 	};
 	_text->submits(
-	) | rpl::start_with_next(submitted, _text->lifetime());
+	) | rpl::on_next(submitted, _text->lifetime());
 }
 
 void EditMarkBox::setInnerFocus() {
