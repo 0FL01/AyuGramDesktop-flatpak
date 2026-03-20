@@ -302,6 +302,30 @@ void SetupOther(not_null<Ui::VerticalLayout*> container) {
 			AyuSettings::save();
 		},
 		container->lifetime());
+
+	AddSkip(container);
+
+	AddButtonWithIcon(
+		container,
+		tr::ayu_BlockAdsByKeywords(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->blockAdsByKeywords)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->blockAdsByKeywords);
+		}) | on_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_blockAdsByKeywords(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+
+	AddSkip(container);
+	AddDividerText(container, tr::ayu_BlockAdsKeywordsHint());
 }
 
 void AyuGhost::setupContent(not_null<Window::SessionController*> controller) {
