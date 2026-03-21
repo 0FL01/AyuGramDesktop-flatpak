@@ -163,6 +163,30 @@ void SetupQoLToggles(not_null<Ui::VerticalLayout*> container, not_null<Window::S
 		},
 		container->lifetime());
 
+	AddButtonWithIcon(
+		container,
+		tr::ayu_BlockAdsByKeywords(),
+		st::settingsButtonNoIcon
+	)->toggleOn(
+		rpl::single(settings->blockAdsByKeywords)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->blockAdsByKeywords);
+		}) | on_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_blockAdsByKeywords(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+
+	AddSkip(container);
+	AddDividerText(container, tr::ayu_BlockAdsKeywordsHint());
+
+	AddSkip(container);
+
 	std::vector checkboxes = {
 		NestedEntry{
 			tr::ayu_CollapseSimilarChannels(tr::now), settings->collapseSimilarChannels, [=](bool enabled)
