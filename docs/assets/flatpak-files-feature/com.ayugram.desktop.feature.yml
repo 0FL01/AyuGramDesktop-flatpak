@@ -1,4 +1,4 @@
-app-id: com.ayugram.desktop
+app-id: com.ayugram.desktop.feature
 
 runtime: org.gnome.Platform
 runtime-version: '48'
@@ -24,11 +24,11 @@ finish-args:
   - --talk-name=org.sigxcpu.Feedback
 
 modules:
-  - name: ayugram-repack
+  - name: ayugram-feature-repack
     buildsystem: simple
     build-commands:
-      - sed -i 's|^Exec=.*|Exec=ayugram-desktop -- %u|' usr/share/applications/com.ayugram.desktop.desktop
-      - sed -i 's|^Exec=.*|Exec=/app/bin/ayugram-desktop|' usr/share/dbus-1/services/com.ayugram.desktop.service
+      - sed -i 's|^Exec=.*|Exec=ayugram-desktop -- %u|' usr/share/applications/com.ayugram.desktop.feature.desktop
+      - sed -i 's|^Exec=.*|Exec=/app/bin/ayugram-desktop|' usr/share/dbus-1/services/com.ayugram.desktop.feature.service
       - install -d /app/share/
       - install -Dm755 AyuGram /app/bin/ayugram-desktop
       - cp -a usr/share/* /app/share/
