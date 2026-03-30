@@ -184,15 +184,9 @@ void MessagePreview::paintEvent(QPaintEvent *e) {
 		p.setPen(Qt::NoPen);
 		p.setBrush(context.st->msgServiceBg());
 		p.drawEllipse(shareRect);
-		p.save();
-		const auto center = shareRect.center();
-		p.translate(center);
-		p.scale(-1., 1.);
-		p.translate(-center);
 		context.st->historyFastShareIcon().paintInCenter(
 			p,
 			shareRect);
-		p.restore();
 	}
 }
 
