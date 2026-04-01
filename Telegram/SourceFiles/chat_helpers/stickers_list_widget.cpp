@@ -81,6 +81,7 @@ base::options::toggle OptionUnlimitedRecentStickers({
 	.id = kOptionUnlimitedRecentStickers,
 	.name = "Unlimited recent stickers",
 	.description = "Display as much recent stickers as the server provides",
+	.scope = static_cast<base::options::details::ScopeFlag>(0)
 });
 
 [[nodiscard]] bool SetInMyList(Data::StickersSetFlags flags) {
