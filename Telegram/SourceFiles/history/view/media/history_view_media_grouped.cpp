@@ -413,6 +413,11 @@ void GroupedMedia::draw(Painter &p, const PaintContext &context) const {
 	auto anyDeleted = false;
 	const auto &settings = AyuSettings::getInstance();
 	const auto perItemOpacityEnabled = settings.semiTransparentDeletedMessages();
+	if (!perItemOpacityEnabled) {
+		for (const auto &part : _parts) {
+			part.deletedAnimation.stop();
+		}
+	}
 	if (perItemOpacityEnabled) {
 		for (const auto &part : _parts) {
 			if (part.item->isDeleted()) {
@@ -456,7 +461,13 @@ void GroupedMedia::draw(Painter &p, const PaintContext &context) const {
 			if (part.item->wasDeletedAnimated()
 				&& !part.deletedAnimation.animating()) {
 				part.deletedAnimation.start(
-					[parent = _parent] { parent->repaint(); },
+					[parent = _parent] {
+						if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {
+							return false;
+						}
+						parent->repaint();
+						return true;
+					},
 					1.,
 					0.7,
 					500,

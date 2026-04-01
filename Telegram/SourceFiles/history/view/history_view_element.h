@@ -750,6 +750,7 @@ private:
 	virtual QSize performCountOptimalSize() = 0;
 	virtual QSize performCountCurrentSize(int newWidth) = 0;
 
+	void refreshDeletedAnimationTarget();
 	void refreshMedia(Element *replacing);
 	void setTextWithLinks(
 		const TextWithEntities &text,
@@ -781,6 +782,7 @@ private:
 	Context _context = Context();
 
 	mutable Ui::Animations::Simple _deletedOpacityAnimation;
+	mutable std::shared_ptr<base::weak_ptr<Element>> _deletedOpacityAnimationTarget;
 
 };
 

@@ -1203,9 +1203,18 @@ Element::Element(
 			AddComponents(FakeBotAboutTop::Bit());
 		}
 	}
-	if (replacing && replacing->_deletedOpacityAnimation.animating()) {
+	const auto deletedOpacityEnabled
+		= AyuSettings::getInstance().semiTransparentDeletedMessages();
+	if (deletedOpacityEnabled
+		&& replacing
+		&& replacing->_deletedOpacityAnimation.animating()) {
 		_deletedOpacityAnimation = replacing->takeDeletedAnimation();
-	} else if (data->isDeleted() && data->wasDeletedAnimated()) {
+		_deletedOpacityAnimationTarget
+			= replacing->_deletedOpacityAnimationTarget;
+		refreshDeletedAnimationTarget();
+	} else if (deletedOpacityEnabled
+		&& data->isDeleted()
+		&& data->wasDeletedAnimated()) {
 		// grouped messages handle it per-item
 		if (!history()->owner().groups().find(data)) {
 			startDeletedAnimation();
@@ -1353,9 +1362,19 @@ void Element::repaint(QRect r) const {
 	history()->owner().requestViewRepaint(this, r);
 }
 
+void Element::refreshDeletedAnimationTarget() {
+	if (!_deletedOpacityAnimationTarget) {
+		_deletedOpacityAnimationTarget
+			= std::make_shared<base::weak_ptr<Element>>();
+	}
+	*_deletedOpacityAnimationTarget = base::make_weak(this);
+}
+
 float64 Element::deletedOpacity() const {
 	const auto &settings = AyuSettings::getInstance();
 	if (!settings.semiTransparentDeletedMessages()) {
+		_deletedOpacityAnimation.stop();
+		_deletedOpacityAnimationTarget = nullptr;
 		return 1.;
 	}
 	if (_context == Context::AdminLog) { // render normally in "View Deleted"
@@ -1369,14 +1388,33 @@ float64 Element::deletedOpacity() const {
 				&HistoryItem::isDeleted);
 			return allDeleted ? 0.7 : 1.;
 		}
-		return _deletedOpacityAnimation.value(0.7);
+		const auto opacity = _deletedOpacityAnimation.value(0.7);
+		if (!_deletedOpacityAnimation.animating()) {
+			_deletedOpacityAnimationTarget = nullptr;
+		}
+		return opacity;
 	}
 	return 1.;
 }
 
 void Element::startDeletedAnimation() {
+	if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {
+		_deletedOpacityAnimation.stop();
+		_deletedOpacityAnimationTarget = nullptr;
+		return;
+	}
+	refreshDeletedAnimationTarget();
 	_deletedOpacityAnimation.start(
-		[=] { repaint(); },
+		[target = _deletedOpacityAnimationTarget] {
+			if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {
+				return false;
+			}
+			if (const auto view = target->get()) {
+				view->repaint();
+				return true;
+			}
+			return false;
+		},
 		1.,
 		0.7,
 		500,
