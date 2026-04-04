@@ -462,6 +462,11 @@ void SessionInfoBox(
 		st::menuIconInfo);
 	AddSessionInfoRow(
 		container,
+		tr::ayu_SessionInfoOfficialApp(),
+		data.officialApp ? tr::lng_box_yes(tr::now) : tr::lng_box_no(tr::now),
+		st::menuIconInfo);
+	AddSessionInfoRow(
+		container,
 		tr::lng_sessions_ip(),
 		data.ip,
 		st::menuIconIpAddress);
