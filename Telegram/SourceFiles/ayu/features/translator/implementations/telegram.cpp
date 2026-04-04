@@ -30,7 +30,8 @@ CallbackCancel TelegramTranslator::startTranslation(
 		args.requestData.peer,
 		args.requestData.idList,
 		args.requestData.text,
-		args.requestData.toLang
+		args.requestData.toLang,
+		MTP_string() // tone
 	)).done([=](const MTPmessages_TranslatedText &result)
 	{
 		const auto &data = result.data();

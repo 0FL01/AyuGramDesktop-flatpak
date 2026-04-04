@@ -33,7 +33,7 @@ Go to ***BuildPath*\\tdesktop\\Telegram** and run
 
     configure.bat x64 -D TDESKTOP_API_ID=2040 -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
 
-* Open ***BuildPath*\\tdesktop\\out\\Telegram.sln** in Visual Studio 2022
+* Open ***BuildPath*\\tdesktop\\out\\Telegram.slnx** in Visual Studio 2022
 * Select Telegram project and press Build > Build Telegram (Debug and Release configurations)
 * The result AyuGram.exe will be located in **D:\TBuild\tdesktop\out\Debug** (and **Release**)
 

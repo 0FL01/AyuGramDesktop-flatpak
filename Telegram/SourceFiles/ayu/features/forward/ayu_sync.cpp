@@ -272,7 +272,14 @@ void sendDocumentSync(not_null<Main::Session*> session,
 	crl::on_main([=, lst = std::move(group.list), caption = std::move(caption)]() mutable
 	{
 		auto size = lst.files.size();
-		session->api().sendFiles(std::move(lst), type, std::move(caption), size > 1 ? groupId : nullptr, action);
+		if (!lst.files.empty()) {
+			lst.files.front().caption = std::move(caption);
+		}
+		session->api().sendFiles(
+			std::move(lst),
+			type,
+			size > 1 ? groupId : nullptr,
+			action);
 	});
 
 	waitForMsgSync(session, action);
