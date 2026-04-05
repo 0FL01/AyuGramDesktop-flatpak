@@ -2238,6 +2238,7 @@ void ComposeControls::init() {
 		AyuSettings::getInstance().showEmojiButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showMicrophoneButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAutoDeleteButtonInMessageFieldChanges() | rpl::to_empty,
+		AyuSettings::getInstance().showCocoonAiButtonInMessageFieldChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showAttachPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().showEmojiPopupChanges() | rpl::to_empty,
 		AyuSettings::getInstance().channelBottomButtonChanges() | rpl::to_empty,
@@ -3699,6 +3700,7 @@ bool ComposeControls::canSendAiComposeDirect() const {
 bool ComposeControls::hasEnoughLinesForAi() const {
 	if (!_history
 		|| _recording.current()
+		|| !AyuSettings::getInstance().showCocoonAiButtonInMessageField()
 		|| session().appConfig().aiComposeStyles().empty()) {
 		return false;
 	}

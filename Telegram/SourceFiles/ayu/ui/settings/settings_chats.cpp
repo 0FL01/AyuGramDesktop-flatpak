@@ -413,6 +413,13 @@ void BuildMessageFieldElements(SectionBuilder &builder, AyuSectionBuilder &ayu) 
 		.setter = &AyuSettings::setShowMicrophoneButtonInMessageField,
 		.icon = { &st::messageFieldVoiceIcon },
 	});
+	ayu.addSettingToggle({
+		.id = u"ayu/showCocoonAiButtonInMessageField"_q,
+		.title = tr::lng_ai_compose_title(),
+		.getter = &AyuSettings::showCocoonAiButtonInMessageField,
+		.setter = &AyuSettings::setShowCocoonAiButtonInMessageField,
+		.icon = { &st::messageFieldCocoonAiIcon },
+	});
 
 	ayu.addSectionDivider();
 }
