@@ -440,6 +440,10 @@ void AddUserMessagesAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 		return;
 	}
 
+	if (!item->isHistoryEntry()) {
+		return;
+	}
+
 	if (item->history()->peer->isChat() || item->history()->peer->isMegagroup()) {
 		menu->addAction(
 			tr::ayu_UserMessagesMenuText(tr::now),
@@ -676,7 +680,7 @@ void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item, Hi
 		return;
 	}
 
-	if (!item || item->isService() || item->isLocal() || !item->allowsForward() || item->id <= 0) {
+	if (!item || !item->isHistoryEntry() || item->isService() || item->isLocal() || !item->allowsForward() || item->id <= 0) {
 		return;
 	}
 
@@ -773,7 +777,7 @@ void AddRepeatMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item, Hi
 }
 
 void AddReadUntilAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
-	if (item->isLocal() || item->out() || item->isDeleted() || item->history()->peer->isSelf()) {
+	if (!item->isHistoryEntry() || item->isLocal() || item->out() || item->isDeleted() || item->history()->peer->isSelf()) {
 		return;
 	}
 
