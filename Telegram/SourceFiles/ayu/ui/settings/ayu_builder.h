@@ -11,7 +11,7 @@
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
 
-namespace Settings::AyBuilder {
+namespace Settings::AyuBuilder {
 
 class AyuSectionBuilder {
 public:
@@ -89,4 +89,4 @@ private:
 	Builder::SectionBuilder &_builder;
 };
 
-} // namespace Settings::AyBuilder
+} // namespace Settings::AyuBuilder

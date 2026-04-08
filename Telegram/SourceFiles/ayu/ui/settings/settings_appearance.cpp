@@ -34,7 +34,7 @@
 namespace Settings {
 
 using namespace Builder;
-using namespace AyBuilder;
+using namespace AyuBuilder;
 
 namespace {
 

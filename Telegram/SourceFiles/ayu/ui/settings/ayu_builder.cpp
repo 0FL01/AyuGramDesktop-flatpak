@@ -19,7 +19,7 @@
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 
-namespace Settings::AyBuilder {
+namespace Settings::AyuBuilder {
 namespace {
 
 [[nodiscard]] QString ResolveTitle(rpl::producer<QString> title) {
@@ -265,4 +265,4 @@ void AyuSectionBuilder::addSectionDivider() {
 	_builder.addSkip();
 }
 
-} // namespace Settings::AyBuilder
+} // namespace Settings::AyuBuilder
