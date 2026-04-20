@@ -49,10 +49,7 @@ body:
       label: Installation source
       multiple: false
       options:
-        - Binary from GitHub / @AyuGramReleases channel
-        - Arch Linux (ayugram-desktop / ayugram-desktop-git)
-        - Arch Linux (ayugram-desktop-bin)
-        - flatpak by 0FL01
+        - Binary from GitHub / official Telegram source
         - Other (unofficial) source
     validations:
       required: true

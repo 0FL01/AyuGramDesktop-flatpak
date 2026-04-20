@@ -1,0 +1,270 @@
+name: Build AyuGram Flatpak
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    name: Build and Release Flatpak
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    timeout-minutes: 1440
+
+    steps:
+      - name: Force clean workspace
+        run: |
+          echo "Forcing workspace cleanup..."
+          sudo chown -R $USER:$USER . || true  # Change file ownership
+          sudo rm -rf ./* .ccache .git* || true  # Explicitly remove .ccache
+          sudo find . -path . -prune -o -exec rm -rf {} + || true  # Additional cleanup
+
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Sync with upstream repository (AyuGram)
+        run: |
+          # Добавляем вышестоящий (upstream) репозиторий
+          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
+
+          # Сохраняем каталоги, которые нельзя перезаписывать
+          PRESERVE_BACKUP_ROOT="/tmp/preserve-backup-$$"
+          mkdir -p "$PRESERVE_BACKUP_ROOT"
+          for path in docs .github README.md; do
+            if [ -e "$path" ]; then
+              echo "Backing up $path before reset..."
+              cp -a "$path" "$PRESERVE_BACKUP_ROOT/"
+            fi
+          done
+
+          # Получаем все актуальные данные и теги из upstream
+          git fetch upstream --tags --no-recurse-submodules
+
+          # Переключаемся на нашу локальную ветку dev
+          git checkout dev
+
+          # Устанавливаем личность бота для выполнения команд Git
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          echo "Resetting local dev branch to match upstream/dev..."
+          git reset --hard upstream/dev
+
+          # Восстанавливаем каталоги, которые нельзя перезаписывать, и коммитим изменения
+          CHANGES_MADE=false
+          for path in docs .github README.md; do
+            if [ -e "$PRESERVE_BACKUP_ROOT/$path" ]; then
+              echo "Restoring $path after reset..."
+              rm -rf "$path"
+              cp -a "$PRESERVE_BACKUP_ROOT/$path" "$path"
+              git add "$path" || true
+              CHANGES_MADE=true
+            fi
+          done
+
+          if [ "$CHANGES_MADE" = true ]; then
+            if ! git diff --cached --quiet; then
+              git commit -m "Preserve local docs and .github during upstream sync [skip ci]"
+            fi
+          else
+            echo "No preserved directories were restored."
+          fi
+
+          # Принудительно отправляем обновленную ветку в наш форк (origin)
+          # Флаг --force необходим, так как мы перезаписали историю коммитов.
+          echo "Force pushing the updated dev branch to origin..."
+          git push origin dev --force
+
+      - name: Initialize submodules for upstream/dev
+        run: |
+          echo "Syncing and updating git submodules..."
+          git submodule sync --recursive
+          # Пытаемся обновить подмодули. Если ошибка - пробуем использовать upstream для lib_ui
+          if ! git submodule update --init --force --recursive; then
+            echo "Submodule update failed. Suggesting upstream URL for Telegram/lib_ui..."
+            git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
+            git submodule update --init --force --recursive
+          fi
+
+      - name: Get latest version and create release tag
+        id: get_version
+        run: |
+          # Определяем последний тег в upstream/dev (нужны теги, уже подтянуты на предыдущем шаге)
+          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev)
+          APP_VERSION=${LATEST_TAG#v}
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          RELEASE_TAG="flatpak-${LATEST_TAG}-${TIMESTAMP}"
+
+          echo "Latest AyuGram tag: ${LATEST_TAG}"
+          echo "Application version: ${APP_VERSION}"
+          echo "Release tag for this fork: ${RELEASE_TAG}"
+
+          echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+
+          # Get the current commit hash in upstream/dev to use it in the release description
+          UPSTREAM_COMMIT=$(git rev-parse upstream/dev)
+          echo "Commit hash upstream/dev: ${UPSTREAM_COMMIT}"
+          echo "UPSTREAM_COMMIT=${UPSTREAM_COMMIT}" >> $GITHUB_ENV
+
+      - name: Update metainfo.xml with new release
+        run: |
+          # Path to the metadata file
+          METAINFO_FILE="docs/assets/flatpak-files/usr/share/metainfo/com.ayugram.desktop.metainfo.xml"
+
+          # Current date in YYYY-MM-DD format
+          CURRENT_DATE=$(date +%Y-%m-%d)
+
+          echo "Adding release ${{ env.APP_VERSION }} ($CURRENT_DATE) to $METAINFO_FILE"
+
+          # Form the release block as a single line (avoid issues with newlines inside XML)
+          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Automatic Flatpak build. Synchronized with upstream tag ${{ env.LATEST_TAG }}.</p></description></release>"
+
+          # Insert NEW_RELEASE right after the opening <releases> tag (latest first).
+          # If <releases> is missing, create it before </component>.
+          if grep -q "<releases>" "$METAINFO_FILE"; then
+            sed -i "s|<releases>|<releases>${NEW_RELEASE}|" "$METAINFO_FILE"
+          else
+            sed -i "s|</component>|<releases>${NEW_RELEASE}</releases></component>|" "$METAINFO_FILE"
+          fi
+
+          echo "metainfo.xml updated"
+
+      - name: Verify that required secrets are set
+        run: |
+          if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
+            echo "::error:: Required secrets TDESKTOP_API_ID and/or TDESKTOP_API_HASH not found or empty."
+            exit 1
+          else
+            echo "Secrets found successfully."
+          fi
+
+      - name: Install dependencies and Flatpak SDK
+        run: |
+          sudo dnf install -y flatpak flatpak-builder python3-pip
+          pip3 install --user poetry
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive org.gnome.Sdk//50
+          flatpak install --user -y --noninteractive org.gnome.Platform//50
+  
+      - name: Cache TDesktop Dependencies
+        id: cache-tdesktop-deps
+        uses: actions/cache@v4
+        with:
+            path: Telegram/ThirdParty
+            key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
+  
+      - name: Restore Qt6 libraries cache
+        id: cache-qt6-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: Libraries/qt6
+          key: ${{ runner.os }}-qt6-${{ env.LATEST_TAG }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-qt6-${{ env.LATEST_TAG }}-
+            ${{ runner.os }}-qt6-
+  
+      - name: Inspect Qt6 cache (pre-prepare)
+        run: |
+          echo "Qt6 cache hit: ${{ steps.cache-qt6-restore.outputs.cache-hit }}"
+          if [ -d "Libraries/qt6" ]; then
+            echo "Qt6 size (pre):"
+            du -sh Libraries/qt6 || true
+            echo "Qt6 top-level dirs (pre):"
+            ls -1d Libraries/qt6/*/ | head -n 10 || true
+          else
+            echo "Libraries/qt6 not present (pre)"
+          fi
+  
+      - name: Prepare libraries
+        run: ./Telegram/build/prepare/linux.sh
+  
+      - name: Inspect Qt6 cache (post-prepare)
+        run: |
+          if [ -d "Libraries/qt6" ]; then
+            echo "Qt6 size (post):"
+            du -sh Libraries/qt6 || true
+            echo "Qt6 top-level dirs (post):"
+            ls -1d Libraries/qt6/*/ | head -n 10 || true
+          else
+            echo "Libraries/qt6 not present (post)"
+          fi
+  
+      - name: Announce Qt6 cache save key
+        if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
+        run: |
+          echo "Saving Qt6 cache with key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}"
+  
+      - name: Save Qt6 libraries cache
+        if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: Libraries/qt6
+          key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}
+  
+      - name: Cache ccache data
+        uses: actions/cache@v4
+        id: cache-ccache
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+  
+      - name: Build AyuGram binary
+        env:
+          TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          TDESKTOP_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          mkdir -p .ccache
+          sudo chmod -R 777 .ccache
+
+          docker run --rm \
+            --cpus="3" \
+            -u root \
+            -v "$PWD:/usr/src/tdesktop" \
+            -v "$PWD/.ccache:/ccache" \
+            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            /bin/bash -c "dnf install -y ccache && \
+                          export PATH=/usr/lib64/ccache:\$PATH && \
+                          export CCACHE_DIR=/ccache && \
+                          export CCACHE_BASEDIR=/usr/src/tdesktop && \
+                          export CCACHE_COMPRESS=1 && \
+                          export CC='ccache gcc' && \
+                          export CXX='ccache g++' && \
+                          /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+                            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
+                            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
+                            -D USE_CCACHE=ON && \
+                          ccache -s"
+
+      - name: Prepare Flatpak build directory
+        run: |
+          mkdir -p ayugram-flatpak-build
+          cp out/Release/AyuGram ayugram-flatpak-build/
+          cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
+
+      - name: Build Flatpak package
+        working-directory: ./ayugram-flatpak-build
+        run: |
+          rm -rf repo build-dir
+          flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
+          flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (build ${{ env.TIMESTAMP }})"
+          body: |
+            Automatic Flatpak build for AyuGram version ${{ env.LATEST_TAG }}.
+            Built from commit: ${{ env.UPSTREAM_COMMIT }}
+
+            [Original GitHub release](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.LATEST_TAG }})
+          files: ayugram-flatpak-build/ayugram-desktop-${{ env.APP_VERSION }}.flatpak
