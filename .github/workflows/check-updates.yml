@@ -58,5 +58,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'flatpak-build.yml',
-              ref: 'dev' // Или ветка, где лежит ваш workflow
+              ref: 'dev',
+              inputs: {
+                upstream_tag: '${{ steps.upstream_tag.outputs.tag }}'
+              }
             });

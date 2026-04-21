@@ -1,16 +1,17 @@
-name: Build AyuGram Flatpak (Stable)
+name: Build AyuGram Flatpak (Dev)
 
 on:
   workflow_dispatch:
     inputs:
-      upstream_tag:
-        description: 'Upstream release tag to build'
-        required: true
+      upstream_ref:
+        description: 'Upstream branch, tag, or commit to build'
+        required: false
+        default: 'dev'
         type: string
 
 jobs:
-  build-and-release:
-    name: Build and Release Flatpak
+  build-and-release-dev:
+    name: Build and Release Dev Flatpak
     runs-on: self-hosted
     permissions:
       contents: write
@@ -20,9 +21,9 @@ jobs:
       - name: Force clean workspace
         run: |
           echo "Forcing workspace cleanup..."
-          sudo chown -R $USER:$USER . || true  # Change file ownership
-          sudo rm -rf ./* .ccache .git* || true  # Explicitly remove .ccache
-          sudo find . -path . -prune -o -exec rm -rf {} + || true  # Additional cleanup
+          sudo chown -R $USER:$USER . || true
+          sudo rm -rf ./* .ccache .git* || true
+          sudo find . -path . -prune -o -exec rm -rf {} + || true
 
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
@@ -30,13 +31,10 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Prepare upstream release source tree
+      - name: Prepare upstream dev source tree
         run: |
-          UPSTREAM_TAG="${{ inputs.upstream_tag }}"
-          if [ -z "$UPSTREAM_TAG" ]; then
-            echo "::error::workflow_dispatch input upstream_tag is required."
-            exit 1
-          fi
+          UPSTREAM_REF="${{ inputs.upstream_ref }}"
+          TARGET_REF="$UPSTREAM_REF"
 
           git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
 
@@ -50,12 +48,16 @@ jobs:
 
           git fetch upstream --tags --no-recurse-submodules
 
-          if ! git rev-parse -q --verify "refs/tags/$UPSTREAM_TAG" >/dev/null; then
-            echo "::error::Upstream tag not found: $UPSTREAM_TAG"
+          if git rev-parse -q --verify "refs/remotes/upstream/$UPSTREAM_REF" >/dev/null; then
+            TARGET_REF="upstream/$UPSTREAM_REF"
+          fi
+
+          if ! git rev-parse -q --verify "$TARGET_REF" >/dev/null; then
+            echo "::error::Upstream ref not found: $UPSTREAM_REF"
             exit 1
           fi
 
-          git checkout --detach "$UPSTREAM_TAG"
+          git checkout --detach "$TARGET_REF"
 
           for path in docs .github README.md; do
             if [ -e "$PRESERVE_BACKUP_ROOT/$path" ]; then
@@ -64,7 +66,7 @@ jobs:
             fi
           done
 
-      - name: Initialize submodules for upstream release
+      - name: Initialize submodules for upstream dev
         run: |
           echo "Syncing and updating git submodules..."
           git submodule sync --recursive
@@ -73,30 +75,35 @@ jobs:
             git submodule update --init --force --recursive
           fi
 
-      - name: Set stable version metadata
+      - name: Set dev version metadata
         id: get_version
         run: |
-          UPSTREAM_TAG="${{ inputs.upstream_tag }}"
-          if ! git describe --tags --exact-match HEAD >/dev/null 2>&1; then
-            echo "::error::HEAD is not checked out at tag $UPSTREAM_TAG"
-            exit 1
-          fi
-
-          APP_VERSION=${UPSTREAM_TAG#v}
+          UPSTREAM_REF="${{ inputs.upstream_ref }}"
+          BASE_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "v0.0.0")
+          BASE_VERSION=${BASE_TAG#v}
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          RELEASE_TAG="flatpak-${UPSTREAM_TAG}-${TIMESTAMP}"
+          BUILD_DATE=$(date +%Y%m%d)
+          APP_VERSION="${BASE_VERSION}~dev.${BUILD_DATE}.g${SHORT_SHA}"
+          RELEASE_TAG="flatpak-dev-${TIMESTAMP}-g${SHORT_SHA}"
+          BUNDLE_NAME="ayugram-desktop-dev-${TIMESTAMP}-g${SHORT_SHA}.flatpak"
           UPSTREAM_COMMIT=$(git rev-parse HEAD)
 
-          echo "Upstream tag: ${UPSTREAM_TAG}"
+          echo "Upstream ref: ${UPSTREAM_REF}"
+          echo "Base tag: ${BASE_TAG}"
           echo "Application version: ${APP_VERSION}"
           echo "Release tag for this fork: ${RELEASE_TAG}"
           echo "Commit hash: ${UPSTREAM_COMMIT}"
 
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
-          echo "UPSTREAM_TAG=${UPSTREAM_TAG}" >> $GITHUB_ENV
+          echo "BASE_TAG=${BASE_TAG}" >> $GITHUB_ENV
+          echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
+          echo "BUNDLE_NAME=${BUNDLE_NAME}" >> $GITHUB_ENV
           echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
           echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
           echo "UPSTREAM_COMMIT=${UPSTREAM_COMMIT}" >> $GITHUB_ENV
+          echo "UPSTREAM_REF=${UPSTREAM_REF}" >> $GITHUB_ENV
 
       - name: Update metainfo.xml with new release
         run: |
@@ -105,7 +112,7 @@ jobs:
 
           echo "Adding release ${{ env.APP_VERSION }} ($CURRENT_DATE) to $METAINFO_FILE"
 
-          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Automatic Flatpak build from upstream release tag ${{ env.UPSTREAM_TAG }}.</p></description></release>"
+          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Manual dev Flatpak build from ${{ env.UPSTREAM_REF }} at ${{ env.UPSTREAM_COMMIT }} based on ${{ env.BASE_TAG }}.</p></description></release>"
 
           if grep -q "<releases>" "$METAINFO_FILE"; then
             sed -i "s|<releases>|<releases>${NEW_RELEASE}|" "$METAINFO_FILE"
@@ -132,24 +139,24 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive org.gnome.Sdk//50
           flatpak install --user -y --noninteractive org.gnome.Platform//50
-  
+
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
         uses: actions/cache@v4
         with:
             path: Telegram/ThirdParty
             key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
-  
+
       - name: Restore Qt6 libraries cache
         id: cache-qt6-restore
         uses: actions/cache/restore@v4
         with:
           path: Libraries/qt6
-          key: ${{ runner.os }}-qt6-${{ env.UPSTREAM_TAG }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
+          key: ${{ runner.os }}-qt6-dev-${{ env.BASE_TAG }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
           restore-keys: |
-            ${{ runner.os }}-qt6-${{ env.UPSTREAM_TAG }}-
-            ${{ runner.os }}-qt6-
-  
+            ${{ runner.os }}-qt6-dev-${{ env.BASE_TAG }}-
+            ${{ runner.os }}-qt6-dev-
+
       - name: Inspect Qt6 cache (pre-prepare)
         run: |
           echo "Qt6 cache hit: ${{ steps.cache-qt6-restore.outputs.cache-hit }}"
@@ -161,10 +168,10 @@ jobs:
           else
             echo "Libraries/qt6 not present (pre)"
           fi
-  
+
       - name: Prepare libraries
         run: ./Telegram/build/prepare/linux.sh
-  
+
       - name: Inspect Qt6 cache (post-prepare)
         run: |
           if [ -d "Libraries/qt6" ]; then
@@ -175,19 +182,19 @@ jobs:
           else
             echo "Libraries/qt6 not present (post)"
           fi
-  
+
       - name: Announce Qt6 cache save key
         if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
         run: |
           echo "Saving Qt6 cache with key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}"
-  
+
       - name: Save Qt6 libraries cache
         if: steps.cache-qt6-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: Libraries/qt6
           key: ${{ steps.cache-qt6-restore.outputs.cache-primary-key }}
-  
+
       - name: Cache ccache data
         uses: actions/cache@v4
         id: cache-ccache
@@ -196,7 +203,7 @@ jobs:
           key: ${{ runner.os }}-ccache-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-ccache-
-  
+
       - name: Build AyuGram binary
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
@@ -235,16 +242,16 @@ jobs:
         run: |
           rm -rf repo build-dir
           flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
-          flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
+          flatpak build-bundle repo ${{ env.BUNDLE_NAME }} com.ayugram.desktop
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (build ${{ env.TIMESTAMP }})"
+          name: "AyuGram ${{ env.APP_VERSION }} Flatpak (dev build ${{ env.TIMESTAMP }})"
           body: |
-            Automatic Flatpak build for AyuGram version ${{ env.UPSTREAM_TAG }}.
+            Manual dev Flatpak build from ${{ env.UPSTREAM_REF }}.
+            Based on tag: ${{ env.BASE_TAG }}
             Built from commit: ${{ env.UPSTREAM_COMMIT }}
-
-            [Original GitHub release](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.UPSTREAM_TAG }})
-          files: ayugram-flatpak-build/ayugram-desktop-${{ env.APP_VERSION }}.flatpak
+          prerelease: true
+          files: ayugram-flatpak-build/${{ env.BUNDLE_NAME }}

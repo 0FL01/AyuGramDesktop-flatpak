@@ -175,3 +175,8 @@ As a result, the `ayugram-desktop-5.16.3.flatpak` file will appear in the curren
 ```bash
 flatpak install --user ayugram-desktop-5.16.3.flatpak
 ```
+
+## CI workflows
+
+- Stable release builds use `.github/workflows/flatpak-build.yml` and must receive an explicit upstream release tag through the `upstream_tag` workflow input.
+- Dev builds use `.github/workflows/flatpak-dev.yml` and are started manually through `workflow_dispatch`. By default they build `upstream/dev` and publish a prerelease with a dev version suffix.
