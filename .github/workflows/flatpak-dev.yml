@@ -79,28 +79,31 @@ jobs:
         id: get_version
         run: |
           UPSTREAM_REF="${{ inputs.upstream_ref }}"
-          BASE_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "v0.0.0")
-          BASE_VERSION=${BASE_TAG#v}
+          SOURCE_VERSION=$(awk '$1=="AppVersionStr"{print $2}' Telegram/build/version)
+          if [ -z "$SOURCE_VERSION" ]; then
+            echo "::error::Failed to read AppVersionStr from Telegram/build/version"
+            exit 1
+          fi
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           BUILD_DATE=$(date +%Y%m%d)
-          APP_VERSION="${BASE_VERSION}~dev.${BUILD_DATE}.g${SHORT_SHA}"
+          APP_VERSION="${SOURCE_VERSION}~dev.${BUILD_DATE}.g${SHORT_SHA}"
           RELEASE_TAG="flatpak-dev-${TIMESTAMP}-g${SHORT_SHA}"
           BUNDLE_NAME="ayugram-desktop-dev-${TIMESTAMP}-g${SHORT_SHA}.flatpak"
           UPSTREAM_COMMIT=$(git rev-parse HEAD)
 
           echo "Upstream ref: ${UPSTREAM_REF}"
-          echo "Base tag: ${BASE_TAG}"
+          echo "Source version: ${SOURCE_VERSION}"
           echo "Application version: ${APP_VERSION}"
           echo "Release tag for this fork: ${RELEASE_TAG}"
           echo "Commit hash: ${UPSTREAM_COMMIT}"
 
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV
-          echo "BASE_TAG=${BASE_TAG}" >> $GITHUB_ENV
           echo "BUILD_DATE=${BUILD_DATE}" >> $GITHUB_ENV
           echo "BUNDLE_NAME=${BUNDLE_NAME}" >> $GITHUB_ENV
           echo "RELEASE_TAG=${RELEASE_TAG}" >> $GITHUB_ENV
           echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_ENV
+          echo "SOURCE_VERSION=${SOURCE_VERSION}" >> $GITHUB_ENV
           echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
           echo "UPSTREAM_COMMIT=${UPSTREAM_COMMIT}" >> $GITHUB_ENV
           echo "UPSTREAM_REF=${UPSTREAM_REF}" >> $GITHUB_ENV
@@ -112,7 +115,7 @@ jobs:
 
           echo "Adding release ${{ env.APP_VERSION }} ($CURRENT_DATE) to $METAINFO_FILE"
 
-          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Manual dev Flatpak build from ${{ env.UPSTREAM_REF }} at ${{ env.UPSTREAM_COMMIT }} based on ${{ env.BASE_TAG }}.</p></description></release>"
+          NEW_RELEASE="  <release version=\"${{ env.APP_VERSION }}\" date=\"${CURRENT_DATE}\"><description><p>Manual dev Flatpak build from ${{ env.UPSTREAM_REF }}. Source version: ${{ env.SOURCE_VERSION }}. Commit: ${{ env.UPSTREAM_COMMIT }}.</p></description></release>"
 
           if grep -q "<releases>" "$METAINFO_FILE"; then
             sed -i "s|<releases>|<releases>${NEW_RELEASE}|" "$METAINFO_FILE"
@@ -152,9 +155,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: Libraries/qt6
-          key: ${{ runner.os }}-qt6-dev-${{ env.BASE_TAG }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
+          key: ${{ runner.os }}-qt6-dev-${{ env.SOURCE_VERSION }}-${{ hashFiles('Telegram/build/prepare/linux.sh') }}
           restore-keys: |
-            ${{ runner.os }}-qt6-dev-${{ env.BASE_TAG }}-
+            ${{ runner.os }}-qt6-dev-${{ env.SOURCE_VERSION }}-
             ${{ runner.os }}-qt6-dev-
 
       - name: Inspect Qt6 cache (pre-prepare)
@@ -251,7 +254,7 @@ jobs:
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (dev build ${{ env.TIMESTAMP }})"
           body: |
             Manual dev Flatpak build from ${{ env.UPSTREAM_REF }}.
-            Based on tag: ${{ env.BASE_TAG }}
+            Source version: ${{ env.SOURCE_VERSION }}
             Built from commit: ${{ env.UPSTREAM_COMMIT }}
           prerelease: true
           files: ayugram-flatpak-build/${{ env.BUNDLE_NAME }}
