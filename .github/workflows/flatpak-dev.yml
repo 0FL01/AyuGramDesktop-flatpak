@@ -30,6 +30,7 @@ jobs:
         with:
           submodules: 'recursive'
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Prepare upstream dev source tree
         run: |
@@ -251,10 +252,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (dev build ${{ env.TIMESTAMP }})"
           body: |
             Manual dev Flatpak build from ${{ env.UPSTREAM_REF }}.
             Source version: ${{ env.SOURCE_VERSION }}
             Built from commit: ${{ env.UPSTREAM_COMMIT }}
           prerelease: true
+          fail_on_unmatched_files: true
           files: ayugram-flatpak-build/${{ env.BUNDLE_NAME }}

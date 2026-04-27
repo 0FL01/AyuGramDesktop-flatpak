@@ -34,6 +34,7 @@ jobs:
           ref: ${{ inputs.branch || 'ads-key' }}
           submodules: 'recursive'
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup git
         run: |
@@ -164,6 +165,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.FEATURE_TAG }}
+          target_commitish: ${{ inputs.branch || 'ads-key' }}
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (Feature: ${{ env.BRANCH_NAME }})"
           body: |
             Feature branch flatpak build.
@@ -172,4 +174,5 @@ jobs:
             Base version: ${{ env.APP_VERSION }}
             
             ${{ inputs.commit_message || 'Feature branch build' }}
+          fail_on_unmatched_files: true
           files: ayugram-feature-build/ayugram-desktop-feature-${{ env.APP_VERSION }}.flatpak

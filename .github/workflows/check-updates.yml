@@ -15,51 +15,106 @@ jobs:
     steps:
       - name: Get latest tag from upstream
         id: upstream_tag
-        run: |
-          LATEST_TAG=$(curl -s https://api.github.com/repos/AyuGram/AyuGramDesktop/releases/latest | jq -r .tag_name)
-          if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
-            echo "Error: Could not fetch latest tag from upstream"
-            exit 1
-          fi
-          echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest upstream tag: $LATEST_TAG"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getLatestRelease({
+              owner: 'AyuGram',
+              repo: 'AyuGramDesktop',
+            });
 
-      - name: Check if tag already exists in our repo
+            if (!data.tag_name) {
+              core.setFailed('Could not fetch latest tag from upstream.');
+              return;
+            }
+
+            core.info(`Latest upstream tag: ${data.tag_name}`);
+            core.setOutput('tag', data.tag_name);
+
+      - name: Check Flatpak release in this repo
         id: check_local
-        run: |
-          # Проверяем релизы в нашем репозитории
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/flatpak-${{ steps.upstream_tag.outputs.tag }}-\*")
-          
-          # Так как наш тег релиза имеет формат flatpak-vX.Y.Z-TIMESTAMP,
-          # мы будем искать по списку релизов и проверять наличие префикса.
-          
-          RELEASES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases")
-          
-          EXISTS=$(echo "$RELEASES" | jq -r --arg tag "${{ steps.upstream_tag.outputs.tag }}" \
-            '.[] | .tag_name | select(startswith("flatpak-" + $tag))' | head -n 1)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const upstreamTag = '${{ steps.upstream_tag.outputs.tag }}';
+            const prefix = `flatpak-${upstreamTag}-`;
+            const { owner, repo } = context.repo;
 
-          if [ -n "$EXISTS" ]; then
-            echo "Release for $EXISTS already exists. Skipping build."
-            echo "needs_build=false" >> $GITHUB_OUTPUT
-          else
-            echo "New tag detected: ${{ steps.upstream_tag.outputs.tag }}. Triggering build."
-            echo "needs_build=true" >> $GITHUB_OUTPUT
-          fi
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const matchingRefs = await github.paginate(
+              github.rest.git.listMatchingRefs,
+              {
+                owner,
+                repo,
+                ref: `tags/${prefix}`,
+                per_page: 100,
+              });
+
+            const releaseTags = releases
+              .map(release => release.tag_name)
+              .filter(tag => tag.startsWith(prefix));
+            const refTags = matchingRefs
+              .map(ref => ref.ref.replace('refs/tags/', ''));
+            const tags = [...new Set([...releaseTags, ...refTags])];
+
+            const timestamp = tag => {
+              const match = tag.match(/-(\d{14})$/);
+              return match ? match[1] : '';
+            };
+            tags.sort((left, right) => {
+              const byTimestamp = timestamp(left).localeCompare(timestamp(right));
+              return byTimestamp || left.localeCompare(right);
+            });
+
+            const latestTag = tags.at(-1) || '';
+            if (!latestTag) {
+              core.info(`No Flatpak release tag found for ${upstreamTag}.`);
+              core.setOutput('needs_build', 'true');
+              return;
+            }
+
+            const release = releases.find(item => item.tag_name === latestTag);
+            const asset = release?.assets?.find(item => (
+              item.state === 'uploaded' && item.name.endsWith('.flatpak')
+            ));
+
+            if (release && asset) {
+              core.info(`Release ${latestTag} already has Flatpak asset ${asset.name}.`);
+              core.setOutput('needs_build', 'false');
+              return;
+            }
+
+            if (!release) {
+              core.warning(`Tag ${latestTag} exists, but GitHub Release is missing.`);
+            } else {
+              core.warning(`Release ${latestTag} exists, but uploaded .flatpak asset is missing.`);
+            }
+
+            core.setOutput('needs_build', 'true');
+            core.setOutput('release_tag', latestTag);
 
       - name: Trigger Build Workflow
         if: steps.check_local.outputs.needs_build == 'true'
         uses: actions/github-script@v7
         with:
           script: |
+            const inputs = {
+              upstream_tag: '${{ steps.upstream_tag.outputs.tag }}',
+            };
+            const releaseTag = '${{ steps.check_local.outputs.release_tag }}';
+            if (releaseTag) {
+              inputs.release_tag = releaseTag;
+            }
+
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'flatpak-build.yml',
               ref: 'dev',
-              inputs: {
-                upstream_tag: '${{ steps.upstream_tag.outputs.tag }}'
-              }
+              inputs,
             });

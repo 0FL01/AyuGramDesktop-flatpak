@@ -7,6 +7,10 @@ on:
         description: 'Upstream release tag to build'
         required: true
         type: string
+      release_tag:
+        description: 'Existing Flatpak release tag to restore, for example flatpak-v6.3.10-20260420135605'
+        required: false
+        type: string
 
 jobs:
   build-and-release:
@@ -29,6 +33,7 @@ jobs:
         with:
           submodules: 'recursive'
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Prepare upstream release source tree
         run: |
@@ -84,7 +89,26 @@ jobs:
 
           APP_VERSION=${UPSTREAM_TAG#v}
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          RELEASE_TAG="flatpak-${UPSTREAM_TAG}-${TIMESTAMP}"
+          RELEASE_TAG_INPUT="${{ inputs.release_tag }}"
+          if [ -n "$RELEASE_TAG_INPUT" ]; then
+            case "$RELEASE_TAG_INPUT" in
+              flatpak-${UPSTREAM_TAG}-*)
+                RELEASE_TAG="$RELEASE_TAG_INPUT"
+                TIMESTAMP="${RELEASE_TAG##*-}"
+                ;;
+              *)
+                echo "::error::release_tag must start with flatpak-${UPSTREAM_TAG}-"
+                exit 1
+                ;;
+            esac
+
+            if ! echo "$TIMESTAMP" | grep -Eq '^[0-9]{14}$'; then
+              echo "::error::release_tag must end with a 14 digit timestamp."
+              exit 1
+            fi
+          else
+            RELEASE_TAG="flatpak-${UPSTREAM_TAG}-${TIMESTAMP}"
+          fi
           UPSTREAM_COMMIT=$(git rev-parse HEAD)
 
           echo "Upstream tag: ${UPSTREAM_TAG}"
@@ -241,10 +265,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (build ${{ env.TIMESTAMP }})"
           body: |
             Automatic Flatpak build for AyuGram version ${{ env.UPSTREAM_TAG }}.
             Built from commit: ${{ env.UPSTREAM_COMMIT }}
 
             [Original GitHub release](https://github.com/AyuGram/AyuGramDesktop/releases/tag/${{ env.UPSTREAM_TAG }})
+          fail_on_unmatched_files: true
           files: ayugram-flatpak-build/ayugram-desktop-${{ env.APP_VERSION }}.flatpak
