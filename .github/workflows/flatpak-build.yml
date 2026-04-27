@@ -42,6 +42,7 @@ jobs:
             echo "::error::workflow_dispatch input upstream_tag is required."
             exit 1
           fi
+          UPSTREAM_TAG_REF="refs/tags/upstream/$UPSTREAM_TAG"
 
           git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
 
@@ -53,14 +54,15 @@ jobs:
             fi
           done
 
-          git fetch upstream --tags --no-recurse-submodules
+          git fetch upstream --no-tags --no-recurse-submodules \
+            "+refs/tags/$UPSTREAM_TAG:$UPSTREAM_TAG_REF"
 
-          if ! git rev-parse -q --verify "refs/tags/$UPSTREAM_TAG" >/dev/null; then
+          if ! git rev-parse -q --verify "$UPSTREAM_TAG_REF^{commit}" >/dev/null; then
             echo "::error::Upstream tag not found: $UPSTREAM_TAG"
             exit 1
           fi
 
-          git checkout --detach "$UPSTREAM_TAG"
+          git checkout --detach "$UPSTREAM_TAG_REF"
 
           for path in docs .github README.md; do
             if [ -e "$PRESERVE_BACKUP_ROOT/$path" ]; then
@@ -82,7 +84,8 @@ jobs:
         id: get_version
         run: |
           UPSTREAM_TAG="${{ inputs.upstream_tag }}"
-          if ! git describe --tags --exact-match HEAD >/dev/null 2>&1; then
+          UPSTREAM_TAG_REF="refs/tags/upstream/$UPSTREAM_TAG"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse "$UPSTREAM_TAG_REF^{commit}")" ]; then
             echo "::error::HEAD is not checked out at tag $UPSTREAM_TAG"
             exit 1
           fi

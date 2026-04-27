@@ -57,21 +57,20 @@ jobs:
           flatpak install --user -y --noninteractive org.gnome.Sdk//50 || true
           flatpak install --user -y --noninteractive org.gnome.Platform//50 || true
 
-      - name: Get upstream version
+      - name: Set feature version metadata
         id: version
         run: |
-          # Add upstream and get latest tag
-          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
-          git fetch upstream --tags --no-recurse-submodules || true
-          
-          LATEST_TAG=$(git describe --tags --abbrev=0 upstream/dev 2>/dev/null || echo "v0.0.0")
-          APP_VERSION=${LATEST_TAG#v}
+          APP_VERSION=$(awk '$1=="AppVersionStr"{print $2}' Telegram/build/version)
+          if [ -z "$APP_VERSION" ]; then
+            echo "::error::Failed to read AppVersionStr from Telegram/build/version"
+            exit 1
+          fi
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           BRANCH_NAME=${{ inputs.branch || 'ads-key' }}
           FEATURE_TAG="feature-${BRANCH_NAME}-${TIMESTAMP}"
           
           echo "Building from branch: ${BRANCH_NAME}"
-          echo "Base version: ${LATEST_TAG}"
+          echo "Source version: ${APP_VERSION}"
           echo "Feature tag: ${FEATURE_TAG}"
           
           echo "APP_VERSION=${APP_VERSION}" >> $GITHUB_ENV

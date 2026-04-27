@@ -47,13 +47,18 @@ jobs:
             fi
           done
 
-          git fetch upstream --tags --no-recurse-submodules
+          git fetch upstream --no-tags --no-recurse-submodules \
+            '+refs/heads/*:refs/remotes/upstream/*'
 
           if git rev-parse -q --verify "refs/remotes/upstream/$UPSTREAM_REF" >/dev/null; then
             TARGET_REF="upstream/$UPSTREAM_REF"
+          elif git ls-remote --exit-code --tags upstream "refs/tags/$UPSTREAM_REF" >/dev/null; then
+            TARGET_REF="refs/tags/upstream/$UPSTREAM_REF"
+            git fetch upstream --no-tags --no-recurse-submodules \
+              "+refs/tags/$UPSTREAM_REF:$TARGET_REF"
           fi
 
-          if ! git rev-parse -q --verify "$TARGET_REF" >/dev/null; then
+          if ! git rev-parse -q --verify "$TARGET_REF^{commit}" >/dev/null; then
             echo "::error::Upstream ref not found: $UPSTREAM_REF"
             exit 1
           fi
