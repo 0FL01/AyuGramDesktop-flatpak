@@ -54,7 +54,7 @@ jobs:
             fi
           done
 
-          git fetch upstream --no-tags --no-recurse-submodules \
+          bash .github/scripts/ci-retry.sh git fetch upstream --no-tags --no-recurse-submodules \
             "+refs/tags/$UPSTREAM_TAG:$UPSTREAM_TAG_REF"
 
           if ! git rev-parse -q --verify "$UPSTREAM_TAG_REF^{commit}" >/dev/null; then
@@ -76,15 +76,15 @@ jobs:
           echo "Syncing and updating git submodules..."
           git submodule sync --recursive
           for attempt in 1 2 3; do
-            if git submodule update --init --force --recursive --depth=1; then
+            if git -c submodule.fetchJobs=1 submodule update --init --force --recursive --depth=1; then
               exit 0
             fi
             git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
             sleep $((attempt * 20))
           done
-          if ! git submodule update --init --force --recursive --depth=1; then
+          if ! git -c submodule.fetchJobs=1 submodule update --init --force --recursive --depth=1; then
             git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
-            git submodule update --init --force --recursive
+            git -c submodule.fetchJobs=1 submodule update --init --force --recursive
           fi
 
       - name: Set stable version metadata
@@ -160,12 +160,12 @@ jobs:
 
       - name: Install dependencies and Flatpak SDK
         run: |
-          sudo dnf install -y flatpak flatpak-builder python3-pip
-          pip3 install --user poetry
+          bash .github/scripts/ci-retry.sh sudo dnf install -y flatpak flatpak-builder python3-pip
+          bash .github/scripts/ci-retry.sh pip3 install --user poetry
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive org.gnome.Sdk//50
-          flatpak install --user -y --noninteractive org.gnome.Platform//50
+          bash .github/scripts/ci-retry.sh flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          bash .github/scripts/ci-retry.sh flatpak install --user -y --noninteractive org.gnome.Sdk//50
+          bash .github/scripts/ci-retry.sh flatpak install --user -y --noninteractive org.gnome.Platform//50
   
       - name: Cache TDesktop Dependencies
         id: cache-tdesktop-deps
@@ -242,21 +242,12 @@ jobs:
           docker run --rm \
             --cpus="3" \
             -u root \
+            -e TDESKTOP_API_ID \
+            -e TDESKTOP_API_HASH \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$PWD/.ccache:/ccache" \
             ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-            /bin/bash -c "dnf install -y ccache && \
-                          export PATH=/usr/lib64/ccache:\$PATH && \
-                          export CCACHE_DIR=/ccache && \
-                          export CCACHE_BASEDIR=/usr/src/tdesktop && \
-                          export CCACHE_COMPRESS=1 && \
-                          export CC='ccache gcc' && \
-                          export CXX='ccache g++' && \
-                          /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-                            -D TDESKTOP_API_ID=${TDESKTOP_API_ID} \
-                            -D TDESKTOP_API_HASH=${TDESKTOP_API_HASH} \
-                            -D USE_CCACHE=ON && \
-                          ccache -s"
+            /bin/bash /usr/src/tdesktop/.github/scripts/build-tdesktop-binary.sh
 
       - name: Prepare Flatpak build directory
         run: |
@@ -267,9 +258,7 @@ jobs:
       - name: Build Flatpak package
         working-directory: ./ayugram-flatpak-build
         run: |
-          rm -rf repo build-dir
-          flatpak-builder --repo=repo --force-clean --disable-rofiles-fuse build-dir com.ayugram.desktop.yml
-          flatpak build-bundle repo ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
+          bash ../.github/scripts/build-flatpak-bundle.sh com.ayugram.desktop.yml ayugram-desktop-${{ env.APP_VERSION }}.flatpak com.ayugram.desktop
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
