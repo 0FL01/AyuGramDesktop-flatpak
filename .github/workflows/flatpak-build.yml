@@ -31,7 +31,7 @@ jobs:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: false
           fetch-depth: 0
           persist-credentials: false
 
@@ -75,7 +75,14 @@ jobs:
         run: |
           echo "Syncing and updating git submodules..."
           git submodule sync --recursive
-          if ! git submodule update --init --force --recursive; then
+          for attempt in 1 2 3; do
+            if git submodule update --init --force --recursive --depth=1; then
+              exit 0
+            fi
+            git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
+            sleep $((attempt * 20))
+          done
+          if ! git submodule update --init --force --recursive --depth=1; then
             git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
             git submodule update --init --force --recursive
           fi
@@ -190,7 +197,7 @@ jobs:
           fi
   
       - name: Prepare libraries
-        run: ./Telegram/build/prepare/linux.sh
+        run: DEBUG= LTO= JOBS=2 ./Telegram/build/prepare/linux.sh
   
       - name: Inspect Qt6 cache (post-prepare)
         run: |
