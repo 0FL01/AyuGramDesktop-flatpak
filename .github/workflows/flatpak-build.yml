@@ -197,7 +197,7 @@ jobs:
           fi
   
       - name: Prepare libraries
-        run: DEBUG= LTO= JOBS=2 ./Telegram/build/prepare/linux.sh
+        run: DEBUG= LTO= JOBS=2 BUILDKIT_MAX_PARALLELISM=2 bash .github/scripts/build-centos-env.sh
   
       - name: Inspect Qt6 cache (post-prepare)
         run: |
