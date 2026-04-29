@@ -38,6 +38,11 @@ jobs:
           RUN_FSTRIM: 1
         run: bash .github/scripts/check-runner-disk-space.sh
 
+      - name: Check GitHub release permission
+        env:
+          GH_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/check-github-release-permission.sh
+
       - name: Prepare upstream dev source tree
         run: |
           UPSTREAM_REF="${{ inputs.upstream_ref }}"
@@ -268,6 +273,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (dev build ${{ env.TIMESTAMP }})"

@@ -42,6 +42,11 @@ jobs:
           RUN_FSTRIM: 1
         run: bash .github/scripts/check-runner-disk-space.sh
 
+      - name: Check GitHub release permission
+        env:
+          GH_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/check-github-release-permission.sh
+
       - name: Setup git
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -184,6 +189,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.FEATURE_TAG }}
           target_commitish: ${{ inputs.branch || 'ads-key' }}
           name: "AyuGram ${{ env.APP_VERSION }} Flatpak (Feature: ${{ env.BRANCH_NAME }})"
