@@ -35,6 +35,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check runner disk space
+        env:
+          MIN_FREE_GIB: 24
+          RUN_FSTRIM: 1
+        run: bash .github/scripts/check-runner-disk-space.sh
+
       - name: Prepare upstream release source tree
         run: |
           UPSTREAM_TAG="${{ inputs.upstream_tag }}"
@@ -230,6 +236,11 @@ jobs:
           key: ${{ runner.os }}-ccache-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-ccache-
+
+      - name: Check runner disk space before binary build
+        env:
+          MIN_FREE_GIB: 24
+        run: bash .github/scripts/check-runner-disk-space.sh "$PWD/.ccache"
   
       - name: Build AyuGram binary
         env:
@@ -254,6 +265,11 @@ jobs:
           mkdir -p ayugram-flatpak-build
           cp out/Release/AyuGram ayugram-flatpak-build/
           cp -r docs/assets/flatpak-files/* ayugram-flatpak-build/
+
+      - name: Check runner disk space before Flatpak build
+        env:
+          MIN_FREE_GIB: 12
+        run: bash .github/scripts/check-runner-disk-space.sh "$PWD/ayugram-flatpak-build"
 
       - name: Build Flatpak package
         working-directory: ./ayugram-flatpak-build

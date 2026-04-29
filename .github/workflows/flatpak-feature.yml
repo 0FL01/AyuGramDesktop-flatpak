@@ -36,6 +36,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check runner disk space
+        env:
+          MIN_FREE_GIB: 24
+          RUN_FSTRIM: 1
+        run: bash .github/scripts/check-runner-disk-space.sh
+
       - name: Setup git
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -128,6 +134,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-
 
+      - name: Check runner disk space before binary build
+        env:
+          MIN_FREE_GIB: 24
+        run: bash .github/scripts/check-runner-disk-space.sh "$PWD/.ccache"
+
       - name: Build AyuGram binary
         env:
           TDESKTOP_API_ID: ${{ secrets.TDESKTOP_API_ID }}
@@ -159,6 +170,11 @@ jobs:
           mkdir -p ayugram-feature-build
           cp out/Release/AyuGram ayugram-feature-build/
           cp -r docs/assets/flatpak-files-feature/* ayugram-feature-build/
+
+      - name: Check runner disk space before Flatpak build
+        env:
+          MIN_FREE_GIB: 12
+        run: bash .github/scripts/check-runner-disk-space.sh "$PWD/ayugram-feature-build"
 
       - name: Build Flatpak package
         working-directory: ./ayugram-feature-build
