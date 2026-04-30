@@ -53,6 +53,10 @@ jobs:
     - name: Update repo metadata
       run: |
         flatpak build-update-repo --generate-static-deltas repo
+        
+    - name: Cleanup old refs
+      run: |
+        flatpak build-update-repo --prune --prune-depth=2 repo
     
     - name: Create index.html
       run: |
