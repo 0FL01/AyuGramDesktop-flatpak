@@ -41,6 +41,7 @@ jobs:
         # Clone existing gh-pages if it exists, or create new repo
         if git ls-remote --exit-code --heads origin gh-pages; then
           git clone --branch gh-pages --single-branch https://github.com/${{ github.repository }}.git repo
+          mkdir -p repo/refs/remotes # fix empty dir disappearing
         else
           ostree init --mode=archive-z2 --repo=repo
         fi
