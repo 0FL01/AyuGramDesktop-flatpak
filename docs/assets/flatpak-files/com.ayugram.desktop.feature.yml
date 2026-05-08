@@ -18,6 +18,7 @@ finish-args:
   - --talk-name=org.gnome.Mutter.IdleMonitor
   - --talk-name=com.canonical.AppMenu.Registrar
   - --talk-name=com.canonical.indicator.application
+  - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.freedesktop.portal.Desktop
   - --talk-name=org.freedesktop.portal.OpenURI
   - --talk-name=org.freedesktop.portal.FileChooser
