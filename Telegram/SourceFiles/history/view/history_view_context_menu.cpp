@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_ringtones.h"
 #include "api/api_transcribes.h"
 #include "api/api_who_reacted.h"
+#include "api/api_stickers_creator.h"
 #include "api/api_toggling_media.h" // Api::ToggleFavedSticker
 #include "base/qt/qt_key_modifiers.h"
 #include "base/unixtime.h"
@@ -26,13 +27,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_text.h"
 #include "history/view/history_view_schedule_box.h"
 #include "history/view/media/history_view_media.h"
+#include "history/view/media/menu/history_view_poll_menu.h"
 #include "history/view/media/history_view_save_document_action.h"
 #include "history/view/media/history_view_web_page.h"
 #include "history/view/reactions/history_view_reactions_list.h"
 #include "info/info_memento.h"
-#include "info/profile/info_profile_widget.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_action.h"
+#include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/menu/menu_common.h"
 #include "ui/widgets/menu/menu_multiline_action.h"
 #include "ui/widgets/menu/menu_separator.h"
@@ -43,6 +45,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_utilities.h"
 #include "ui/controls/delete_message_context_action.h"
 #include "ui/controls/who_reacted_context_action.h"
+#include "ui/dynamic_image.h"
+#include "ui/dynamic_thumbnails.h"
 #include "ui/boxes/edit_factcheck_box.h"
 #include "ui/boxes/report_box_graphics.h"
 #include "ui/painter.h"
@@ -77,7 +81,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_chat.h"
 #include "data/data_file_click_handler.h"
-#include "data/data_file_origin.h"
 #include "data/data_message_reactions.h"
 #include "data/data_user.h"
 #include "data/stickers/data_custom_emoji.h"
@@ -293,6 +296,12 @@ void AddDocumentActions(
 				: tr::lng_context_pack_add(tr::now)),
 			[=] { ShowStickerPackInfo(document, list); },
 			&st::menuIconStickers);
+	}
+	if (document->sticker() && !document->sticker()->set) {
+		Api::AddAddToOwnedSetAction(
+			Ui::Menu::CreateAddActionCallback(menu),
+			controller->uiShow(),
+			document);
 	}
 	if (document->sticker()) {
 		const auto isFaved = document->owner().stickers().isFaved(document);
@@ -908,12 +917,13 @@ bool AddDeleteMessageAction(
 			const auto list = HistoryItemsList{ item };
 			if (CanCreateModerateMessagesBox(list)) {
 				const auto opt = DefaultModerateMessagesBoxOptions();
-				controller->show(
-					Box(CreateModerateMessagesBox, list, nullptr, opt));
+				controller->show(Box(
+					CreateModerateMessagesBox,
+					ModerateMessagesBoxEntry{ .items = list },
+					nullptr,
+					opt));
 			} else {
-				const auto suggestModerateActions = false;
-				controller->show(
-					Box<DeleteMessagesBox>(item, suggestModerateActions));
+				controller->show(Box<DeleteMessagesBox>(item));
 			}
 		}
 	});
@@ -1180,26 +1190,37 @@ void EditTagBox(
 	});
 }
 
-void ShowWhoReadInfo(
+[[nodiscard]] Fn<void(Ui::WhoReadParticipant)> MakeModerateReactionChosen(
 		not_null<Window::SessionController*> controller,
 		FullMsgId itemId,
-		Ui::WhoReadParticipant who) {
-	const auto peer = controller->session().data().peer(itemId.peer);
-	const auto participant = peer->owner().peer(PeerId(who.id));
-	const auto migrated = participant->migrateFrom();
-	const auto origin = who.dateReacted
-		? Info::Profile::Origin{
-			Info::Profile::GroupReactionOrigin{ peer, itemId.msg },
+		not_null<PeerData*> peer,
+		Fn<void()> hideMenu) {
+	if (!Reactions::CanModerateReactionByDeleteMessages(peer)) {
+		return {};
+	}
+	return [=, hideMenu = std::move(hideMenu)](Ui::WhoReadParticipant who) {
+		if (who.id == 0 || who.customEntityData.isEmpty()) {
+			return;
 		}
-		: Info::Profile::Origin();
-	auto memento = std::make_shared<Info::Memento>(
-		std::vector<std::shared_ptr<Info::ContentMemento>>{
-		std::make_shared<Info::Profile::Memento>(
+		const auto item = controller->session().data().message(itemId);
+		if (!item) {
+			return;
+		}
+		const auto participant = item->history()->peer->owner().peer(
+			PeerId(who.id));
+		if (participant->isSelf()) {
+			return;
+		}
+		if (hideMenu) {
+			hideMenu();
+		}
+		Reactions::ShowModerateReactionBox(
+			controller,
+			item->history()->peer,
+			itemId.msg,
 			participant,
-			migrated ? migrated->id : PeerId(),
-			origin),
-	});
-	controller->showSection(std::move(memento));
+			who.reaction);
+	};
 }
 
 [[nodiscard]] rpl::producer<not_null<UserData*>> LookupMessageAuthor(
@@ -1319,22 +1340,74 @@ rpl::producer<QString> VoiceTimecodeUpdates(FullMsgId itemId) {
 	}) | rpl::distinct_until_changed();
 }
 
-void InsertPollHiddenResultsLabel(not_null<Ui::PopupMenu*> menu) {
+void InsertPollMenuLabel(
+		not_null<Ui::PopupMenu*> menu,
+		TextWithEntities text,
+		const style::MenuSeparator &separatorSt) {
 	auto label = base::make_unique_q<Ui::Menu::MultilineAction>(
 		menu->menu(),
 		menu->st().menu,
 		st::historyHasCustomEmoji,
 		st::historyHasCustomEmojiPosition,
-		tr::lng_polls_context_ends(tr::now, tr::rich));
+		std::move(text));
+	label->setAttribute(Qt::WA_TransparentForMouseEvents);
 	menu->insertAction(0, std::move(label));
 	const auto sepAction = new QAction(menu->menu());
 	sepAction->setSeparator(true);
 	auto separator = base::make_unique_q<Ui::Menu::Separator>(
 		menu->menu(),
 		menu->st().menu,
-		menu->st().menu.separator,
+		separatorSt,
 		sepAction);
 	menu->insertAction(1, std::move(separator));
+}
+
+void InsertPollHiddenResultsLabel(not_null<Ui::PopupMenu*> menu) {
+	InsertPollMenuLabel(
+		menu,
+		tr::lng_polls_context_ends(tr::now, tr::rich),
+		menu->st().menu.separator);
+}
+
+[[nodiscard]] TextWithEntities PollVoteRestrictionsLabelText(
+		not_null<HistoryItem*> item,
+		not_null<PollData*> poll) {
+	auto result = TextWithEntities();
+	if (poll->subscribersOnly()) {
+		const auto peer = item->history()->peer.get();
+		const auto channel = peer->isBroadcast()
+			? peer->name()
+			: QString();
+		result = channel.isEmpty()
+			? tr::lng_polls_vote_restricted_subscribers_recent(
+				tr::now,
+				tr::rich)
+			: tr::lng_polls_vote_restricted_subscribers_channel(
+				tr::now,
+				lt_channel,
+				tr::bold(channel),
+				tr::rich);
+	}
+	if (!poll->countries.empty()) {
+		auto countriesText = PollCountriesRestrictionText(poll->countries);
+		if (result.text.isEmpty()) {
+			result = std::move(countriesText);
+		} else {
+			result.append('\n').append(std::move(countriesText));
+		}
+	}
+	return result;
+}
+
+void InsertPollVoteRestrictionsLabel(
+		not_null<Ui::PopupMenu*> menu,
+		not_null<HistoryItem*> item,
+		not_null<PollData*> poll) {
+	auto text = PollVoteRestrictionsLabelText(item, poll);
+	if (text.text.isEmpty()) {
+		return;
+	}
+	InsertPollMenuLabel(menu, std::move(text), st::expandedMenuSeparator);
 }
 
 ContextMenuRequest::ContextMenuRequest(
@@ -1387,6 +1460,9 @@ void FillContextMenuItems(
 					[=] {
 						const auto tc = CurrentVoiceTimecode(msgId);
 						if (const auto strong = weak.get()) {
+							strong->replyToMessageRequestNotify(
+								{ .messageId = msgId },
+								base::IsCtrlPressed());
 							strong->insertTextAtCursor(
 								tc.value_or(*timecode));
 						}
@@ -1534,21 +1610,31 @@ base::unique_qptr<Ui::PopupMenu> FillContextMenu(
 	if (item) {
 		const auto media = item->media();
 		const auto poll = media ? media->poll() : nullptr;
-		if (poll && !poll->closed() && poll->hideResultsUntilClose()) {
-			InsertPollHiddenResultsLabel(result.get());
+		if (poll && !poll->closed()) {
+			if (poll->hideResultsUntilClose()) {
+				InsertPollHiddenResultsLabel(result.get());
+			}
+			InsertPollVoteRestrictionsLabel(result.get(), item, poll);
 		}
 	}
 
 	if (hasPollOption) {
 		const auto raw = result.get();
 		const auto owner = &item->history()->owner();
+		const auto controller = list->controller();
 		raw->stashContent([=](not_null<Ui::PopupMenu*> menu) {
-			FillPollOptionPage(menu, owner, itemId, pollOption, [=] {
-				list->replyToMessageRequestNotify({
-					.messageId = itemId,
-					.pollOption = pollOption,
-				}, base::IsCtrlPressed());
-			});
+			FillPollOptionPage(
+				menu,
+				owner,
+				itemId,
+				pollOption,
+				controller,
+				[=] {
+					list->replyToMessageRequestNotify({
+						.messageId = itemId,
+						.pollOption = pollOption,
+					}, base::IsCtrlPressed());
+				});
 		});
 	}
 	return result;
@@ -1634,6 +1720,7 @@ void FillPollOptionPage(
 		not_null<Data::Session*> owner,
 		FullMsgId itemId,
 		const QByteArray &pollOption,
+		not_null<Window::SessionController*> controller,
 		Fn<void()> replyToOption) {
 	const auto item = owner->message(itemId);
 	if (!item) {
@@ -1717,31 +1804,60 @@ void FillPollOptionPage(
 			},
 			&st::menuIconDelete);
 	}
-	if (a->addedBy) {
+	if (const auto addedBy = a->addedBy) {
 		menu->addSeparator(&st::expandedMenuSeparator);
-		auto view = Ui::PeerUserpicView();
-		auto userpic = PeerData::GenerateUserpicImage(
-			a->addedBy,
-			view,
-			st::defaultWhoRead.photoSize);
 		const auto date = a->addedDate
 			? Ui::FormatDateTime(
 				base::unixtime::parse(a->addedDate))
 			: QString();
-		menu->addAction(
-			base::make_unique_q<Ui::WhoReactedEntryAction>(
-				menu->menu(),
-				nullptr,
-				menu->menu()->st(),
-				Ui::WhoReactedEntryData{
-					.text = tr::lng_polls_option_added_by(
-						tr::now,
-						lt_user,
-						a->addedBy->shortName()),
-					.date = date,
-					.type = Ui::WhoReactedType::RefRecipient,
-					.userpic = std::move(userpic),
-				}));
+		auto action = base::make_unique_q<Ui::WhoReactedEntryAction>(
+			menu->menu(),
+			nullptr,
+			menu->menu()->st(),
+			Ui::WhoReactedEntryData());
+		const auto raw = action.get();
+		const auto thumbnail = Ui::MakeUserpicThumbnail(addedBy);
+		const auto size = st::defaultWhoRead.photoSize;
+		const auto refresh = [=] {
+			raw->setData({
+				.text = tr::lng_polls_option_added_by(
+					tr::now,
+					lt_user,
+					addedBy->shortName()),
+				.date = date,
+				.type = Ui::WhoReactedType::RefRecipient,
+				.userpic = thumbnail->image(size),
+				.callback = [=] { controller->showPeerInfo(addedBy); },
+			});
+		};
+		thumbnail->subscribeToUpdates(refresh);
+		refresh();
+		menu->lifetime().add([=] {
+			thumbnail->subscribeToUpdates(nullptr);
+		});
+		menu->addAction(std::move(action));
+	}
+	{
+		auto packIds = std::vector<StickerSetIdentifier>();
+		for (const auto &entity : a->text.entities) {
+			if (entity.type() == EntityType::CustomEmoji) {
+				const auto id = Data::ParseCustomEmojiData(entity.data());
+				if (const auto set = owner->document(id)->sticker()) {
+					if (set->set.id
+						&& !ranges::contains(
+							packIds,
+							set->set.id,
+							&StickerSetIdentifier::id)) {
+						packIds.push_back(set->set);
+					}
+				}
+			}
+		}
+		AddEmojiPacksAction(
+			menu,
+			std::move(packIds),
+			EmojiPacksSource::PollOption,
+			controller);
 	}
 }
 
@@ -1835,7 +1951,8 @@ void AddPollActions(
 		not_null<HistoryItem*> item,
 		Context context,
 		not_null<Window::SessionController*> controller,
-		bool skipRetractVote) {
+		bool skipRetractVote,
+		bool skipViewStats) {
 	{
 		constexpr auto kRadio = "\xf0\x9f\x94\x98";
 		const auto radio = QString::fromUtf8(kRadio);
@@ -1861,10 +1978,15 @@ void AddPollActions(
 		&& (context != Context::ChatPreview)) {
 		return;
 	}
+	const auto itemId = item->fullId();
+	if (poll->canViewStats() && item->isRegular() && !skipViewStats) {
+		menu->addAction(tr::lng_polls_view_stats(tr::now), [=] {
+			ShowPollStatsBox(controller, itemId);
+		}, &st::menuIconStats);
+	}
 	if (poll->closed()) {
 		return;
 	}
-	const auto itemId = item->fullId();
 	if (!skipRetractVote
 		&& poll->voted()
 		&& !poll->quiz()
@@ -1991,8 +2113,23 @@ void AddWhoReactedAction(
 		if (const auto strong = weak.get()) {
 			strong->hideMenu();
 		}
-		ShowWhoReadInfo(controller, itemId, who);
+		const auto participant = user->owner().peer(PeerId(who.id));
+		Reactions::ShowReactionParticipantInfo(
+			controller,
+			participant,
+			user,
+			itemId.msg,
+			who.dateReacted);
 	};
+	const auto moderateReactionChosen = MakeModerateReactionChosen(
+		controller,
+		itemId,
+		user,
+		[=] {
+			if (const auto strong = weak.get()) {
+				strong->hideMenu();
+			}
+		});
 	const auto showAllChosen = [=, itemId = item->fullId()]{
 		// Pressing on an item that has a submenu doesn't hide it :(
 		if (const auto strong = weak.get()) {
@@ -2027,7 +2164,8 @@ void AddWhoReactedAction(
 			Api::WhoReacted(item, context, st::defaultWhoRead, whoReadIds),
 			Data::ReactedMenuFactory(&controller->session()),
 			participantChosen,
-			showAllChosen));
+			showAllChosen,
+			moderateReactionChosen));
 		AddWhenEditedForwardedAuthorActionHelper(
 			menu,
 			item,
@@ -2182,8 +2320,24 @@ void ShowWhoReactedMenu(
 	};
 	const auto itemId = item->fullId();
 	const auto participantChosen = [=](Ui::WhoReadParticipant who) {
-		ShowWhoReadInfo(controller, itemId, who);
+		const auto originPeer = item->history()->peer;
+		const auto participant = originPeer->owner().peer(PeerId(who.id));
+		Reactions::ShowReactionParticipantInfo(
+			controller,
+			participant,
+			originPeer,
+			itemId.msg,
+			who.dateReacted);
 	};
+	const auto moderateReactionChosen = MakeModerateReactionChosen(
+		controller,
+		itemId,
+		item->history()->peer,
+		[=] {
+			if (*menu) {
+				(*menu)->hideMenu();
+			}
+		});
 	const auto showAllChosen = [=, itemId = item->fullId()]{
 		if (const auto item = controller->session().data().message(itemId)) {
 			controller->showSection(std::make_shared<Info::Memento>(
@@ -2203,7 +2357,8 @@ void ShowWhoReactedMenu(
 	const auto filler = lifetime.make_state<Ui::WhoReactedListMenu>(
 		Data::ReactedMenuFactory(&controller->session()),
 		participantChosen,
-		showAllChosen);
+		showAllChosen,
+		moderateReactionChosen);
 	const auto state = lifetime.make_state<State>();
 	Api::WhoReacted(
 		item,
@@ -2347,6 +2502,18 @@ void AddEmojiPacksAction(
 					count,
 					tr::rich)
 				: tr::lng_context_animated_reactions(
+					tr::now,
+					lt_name,
+					TextWithEntities{ name },
+					tr::rich);
+		case EmojiPacksSource::PollOption:
+			return name.text.isEmpty()
+				? tr::lng_context_animated_poll_option_many(
+					tr::now,
+					lt_count,
+					count,
+					tr::rich)
+				: tr::lng_context_animated_poll_option(
 					tr::now,
 					lt_name,
 					TextWithEntities{ name },

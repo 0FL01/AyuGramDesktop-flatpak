@@ -69,18 +69,24 @@ void ShowTopPeersSelector(
 
 	const auto send = [=](not_null<PeerData*> peer) {
 		if (const auto item = session->data().message(fullId)) {
+			const auto items = session->data().idsToItems(
+				session->data().itemOrItsGroup(item));
+			const auto single = (items.size() == 1);
 			session->api().forwardMessages(
-				Data::ResolvedForwardDraft{ .items = { item } },
+				Data::ResolvedForwardDraft{ .items = items },
 				Api::SendAction(session->data().history(peer)),
 				[=] {
 					using namespace ChatHelpers;
 					auto text = rpl::variable<TextWithEntities>(
 						ForwardedMessagePhrase({
 							.toCount = 1,
-							.singleMessage = 1,
+							.singleMessage = single,
 							.to1 = peer,
 						})).current();
-					show->showToast(std::move(text));
+					show->showToast({
+						.text = std::move(text),
+						.filter = ForwardedToSavedMessagesFilter(session),
+					});
 				});
 		}
 	};

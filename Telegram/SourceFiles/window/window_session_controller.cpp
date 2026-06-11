@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_chat_switch_process.h"
 #include "window/window_controller.h"
 #include "window/window_filters_menu.h"
+#include "window/section_widget.h"
 #include "window/window_separate_id.h"
 #include "info/channel_statistics/earn/info_channel_earn_list.h"
 #include "info/peer_gifts/info_peer_gifts_widget.h"
@@ -44,6 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_saved_messages.h"
 #include "data/data_saved_sublist.h"
 #include "data/data_session.h"
+#include "data/data_thread.h"
 #include "data/data_file_origin.h"
 #include "data/data_flags.h"
 #include "data/data_folder.h"
@@ -118,6 +120,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/cloud_password/settings_cloud_password_start.h"
 #include "settings/cloud_password/settings_cloud_password_email_confirm.h"
 #include "settings/sections/settings_main.h"
+#include "styles/style_chat.h"
 #include "settings/sections/settings_premium.h"
 #include "settings/sections/settings_privacy_security.h"
 #include "styles/style_window.h"
@@ -299,6 +302,9 @@ SendMenu::Details MainWindowShow::sendMenuDetails() const {
 	if (!window) {
 		return SendMenu::Details();
 	}
+	if (const auto section = window->activeLayerSection()) {
+		return section->sendMenuDetails();
+	}
 	return window->content()->sendMenuDetails();
 }
 
@@ -320,7 +326,11 @@ void MainWindowShow::processChosenSticker(
 		ChatHelpers::FileChosen &&chosen) const {
 	if (const auto window = _window.get()) {
 		Ui::PostponeCall(window, [=, chosen = std::move(chosen)]() mutable {
-			window->stickerOrEmojiChosen(std::move(chosen));
+			if (const auto section = window->activeLayerSection()) {
+				section->processChosenSticker(std::move(chosen));
+			} else {
+				window->content()->processChosenSticker(std::move(chosen));
+			}
 		});
 	}
 }
@@ -800,6 +810,7 @@ void SessionNavigation::showPeerByLinkResolved(
 				.context = {
 					.controller = parentController(),
 					.fullscreen = info.botAppFullScreen,
+					.maySkipConfirmation = !info.botAppForceConfirmation,
 				},
 				.button = { .startCommand = startCommand },
 				.source = InlineBots::WebViewSourceLinkBotProfile{
@@ -1843,6 +1854,10 @@ not_null<::MainWindow*> SessionController::widget() const {
 	return _window->widget();
 }
 
+rpl::producer<> SessionController::imeCompositionStarts() const {
+	return widget()->imeCompositionStarts();
+}
+
 auto SessionController::sendingAnimation() const
 -> Ui::MessageSendingAnimationController & {
 	return *_sendingAnimation;
@@ -1879,6 +1894,10 @@ void SessionController::init() {
 	if (session().supportMode()) {
 		session().supportHelper().registerWindow(this);
 	}
+	session().data().drawToReplyRequests(
+	) | rpl::on_next([=](Data::DrawToReplyRequest request) {
+		handleDrawToReplyRequest(std::move(request));
+	}, lifetime());
 	setupShortcuts();
 }
 
@@ -1890,7 +1909,8 @@ void SessionController::setupShortcuts() {
 		return !window().locked()
 			&& (_chatSwitchProcess
 				|| (request.started
-					&& (Core::App().activeWindow() == &window())));
+					&& (Core::App().activeWindow() == &window())
+					&& !isLayerShown()));
 	}) | rpl::on_next([=](const ChatSwitchRequest &request) {
 		if (!_chatSwitchProcess) {
 			_chatSwitchProcess = std::make_unique<ChatSwitchProcess>(
@@ -2723,6 +2743,7 @@ void SessionController::showCalendar(ShowCalendarDescriptor &&descriptor) {
 	const auto chat = descriptor.chat;
 	const auto requestedDate = descriptor.date;
 	const auto topic = chat.topic();
+	const auto sublist = chat.sublist();
 	const auto history = chat.owningHistory();
 	if (!history) {
 		return;
@@ -2796,6 +2817,7 @@ void SessionController::showCalendar(ShowCalendarDescriptor &&descriptor) {
 		: !currentPeerDate.isNull()
 		? currentPeerDate
 		: QDate::currentDate();
+	const auto performJump = descriptor.customJump;
 	struct ButtonState {
 		enum class Type {
 			None,
@@ -2889,32 +2911,34 @@ void SessionController::showCalendar(ShowCalendarDescriptor &&descriptor) {
 				const auto date = base::unixtime::serialize(
 					QDateTime(d, QTime()));
 				if (const auto msgId = search->resolveMsgIdByDate(date)) {
-					performJump(*msgId, close);
+					performJump(FullMsgId(history->peer->id, *msgId), close);
 				}
 			};
 		}
 		return { Factory(factory), std::move(customJump) };
 	}();
 	const auto weak = base::make_weak(this);
-	const auto weakTopic = base::make_weak(topic);
+	const auto weakThread = base::make_weak(chat.thread());
 	const auto jump = [=](const QDate &date, Fn<void()> close) {
 		const auto open = [=](not_null<PeerData*> peer, MsgId id) {
 			if (const auto strong = weak.get()) {
-				if (!topic) {
+				if (performJump) {
+					performJump(FullMsgId(peer->id, id), close);
+				} else if (!topic && !sublist) {
 					strong->showPeerHistory(
 						peer,
 						SectionShow::Way::Forward,
 						id);
-				} else if (const auto strongTopic = weakTopic.get()) {
-					strong->showTopic(
-						strongTopic,
+				} else if (const auto strongThread = weakThread.get()) {
+					strong->showThread(
+						strongThread,
 						id,
 						SectionShow::Way::Forward);
 					strong->hideLayer(anim::type::normal);
 				}
 			}
 		};
-		if (!topic || weakTopic) {
+		if ((!topic && !sublist) || weakThread) {
 			session().api().resolveJumpToDate(chat, date, open);
 		}
 	};
@@ -3115,6 +3139,24 @@ void SessionController::removeLayerBlackout() {
 
 bool SessionController::isLayerShown() const {
 	return _window->isLayerShown();
+}
+
+rpl::producer<bool> SessionController::boxShownValue() const {
+	return _window->boxShownValue();
+}
+
+void SessionController::registerActiveLayerSection(SectionWidget *section) {
+	_activeLayerSection = section;
+}
+
+void SessionController::unregisterActiveLayerSection(SectionWidget *section) {
+	if (_activeLayerSection == section) {
+		_activeLayerSection = nullptr;
+	}
+}
+
+SectionWidget *SessionController::activeLayerSection() const {
+	return _activeLayerSection.data();
 }
 
 not_null<MainWidget*> SessionController::content() const {

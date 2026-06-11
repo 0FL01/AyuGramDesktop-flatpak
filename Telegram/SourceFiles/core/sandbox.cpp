@@ -30,6 +30,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/ui_utility.h"
 #include "ui/effects/animations.h"
 
+#ifdef Q_OS_MAC
+#include "platform/mac/global_menu_mac.h"
+#endif // Q_OS_MAC
+
 #include <QtCore/QLockFile>
 #include <QtGui/QSessionManager>
 #include <QtGui/QScreen>
@@ -50,10 +54,14 @@ base::options::toggle OptionDeadlockDetector({
 const char kOptionDeadlockDetector[] = "deadlock-detector";
 
 bool Sandbox::QuitOnStartRequested = false;
+bool Sandbox::SystemShuttingDown = false;
 
 Sandbox::Sandbox(int &argc, char **argv)
 : QApplication(argc, argv)
 , _mainThreadId(QThread::currentThreadId()) {
+#ifdef Q_OS_MAC
+	Platform::CreateGlobalMenu();
+#endif // Q_OS_MAC
 }
 
 int Sandbox::start() {
@@ -123,9 +131,27 @@ int Sandbox::start() {
 
 	crl::on_main(this, [=] { checkForQuit(); });
 	connect(this, &QCoreApplication::aboutToQuit, [=] {
-		customEnterFromEventLoop([&] {
-			closeApplication();
-		});
+		// On Windows, Qt emits aboutToQuit synchronously from its
+		// WM_ENDSESSION handler (QWindowsContext::windowsProc). Running
+		// closeApplication() there destroys QWindows mid-dispatch and
+		// later WM_ENDSESSION messages delivered to other top-level
+		// HWNDs crash on virtual dispatch through stale QWindow*. Detect
+		// that path and defer cleanup to the next main-loop tick so Qt
+		// finishes delivering shutdown messages on still-live windows.
+		// On a normal quit (Ctrl+Q etc.) aboutToQuit fires from the
+		// exec() epilogue after the event loop has exited and queued
+		// events would not run, so we keep the synchronous teardown.
+		if (SystemShuttingDown) {
+			QMetaObject::invokeMethod(this, [=] {
+				customEnterFromEventLoop([&] {
+					closeApplication();
+				});
+			}, Qt::QueuedConnection);
+		} else {
+			customEnterFromEventLoop([&] {
+				closeApplication();
+			});
+		}
 	});
 
 	// https://github.com/telegramdesktop/tdesktop/issues/948
@@ -145,11 +171,22 @@ int Sandbox::start() {
 	return exec();
 }
 
+void Sandbox::NotifySystemShuttingDown() {
+	SystemShuttingDown = true;
+}
+
 void Sandbox::QuitWhenStarted() {
 	if (!QApplication::instance() || !Instance()._started) {
 		QuitOnStartRequested = true;
 	} else {
-		quit();
+		// Use exit(0) instead of quit() to avoid recursive
+		// [NSApp terminate:] on macOS. Since Qt 6.0, quit() routes
+		// through QCocoaIntegration::quit() -> [NSApp terminate:],
+		// which when called from within applicationShouldTerminate:
+		// causes a nested terminate that leads to exit() being called
+		// directly, bypassing normal cleanup. exit(0) properly exits
+		// event loops without going through the platform plugin.
+		QCoreApplication::exit(0);
 	}
 }
 
@@ -222,7 +259,11 @@ void Sandbox::setupScreenScale() {
 	LOG(("ScreenScale: %1").arg(cScreenScale()));
 }
 
-Sandbox::~Sandbox() = default;
+Sandbox::~Sandbox() {
+#ifdef Q_OS_MAC
+	Platform::DestroyGlobalMenu();
+#endif // Q_OS_MAC
+}
 
 bool Sandbox::event(QEvent *e) {
 	if (e->type() == QEvent::Quit) {

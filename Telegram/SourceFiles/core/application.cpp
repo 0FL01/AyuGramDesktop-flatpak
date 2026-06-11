@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/sandbox.h"
 #include "core/local_url_handlers.h"
 #include "core/launcher.h"
+#include "core/proxy_rotation_manager.h"
 #include "core/ui_integration.h"
 #include "chat_helpers/emoji_keywords.h"
 #include "chat_helpers/stickers_emoji_image_loader.h"
@@ -151,6 +152,7 @@ struct Application::Private {
 	base::Timer quitTimer;
 	UiIntegration uiIntegration;
 	Settings settings;
+	std::unique_ptr<ProxyRotationManager> proxyRotation;
 };
 
 Application::Application()
@@ -178,6 +180,7 @@ Application::Application()
 , _setupEmailLock(false)
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
+	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
 
 	_platformIntegration->init();
 
@@ -239,6 +242,7 @@ Application::~Application() {
 	// Domain::finish() and there is a violation on Ensures(started()).
 	closeAdditionalWindows();
 
+	_private->proxyRotation = nullptr;
 	_domain->finish();
 
 	Local::finish();
@@ -843,6 +847,17 @@ void Application::setCurrentProxy(
 	refreshGlobalProxy();
 	_proxyChanges.fire({ was, now });
 	my.connectionTypeChangesNotify();
+	proxyRotationSettingsChanged();
+}
+
+void Application::proxyRotationSettingsChanged() {
+	_private->proxyRotation->settingsChanged();
+}
+
+void Application::checkProxyRotation(
+		not_null<Main::Account*> account,
+		int32 state) {
+	_private->proxyRotation->handleConnectionStateChanged(account, state);
 }
 
 auto Application::proxyChanges() const -> rpl::producer<ProxyChange> {
@@ -1149,7 +1164,25 @@ void Application::checkStartUrls() {
 	if (!cRefStartUrls().isEmpty()
 		&& _lastActivePrimaryWindow
 		&& !_lastActivePrimaryWindow->locked()) {
-		_lastActivePrimaryWindow->widget()->sendPaths();
+		auto interprets = QStringList();
+		auto paths = QStringList();
+		cRefStartUrls() = ranges::views::all(
+			cRefStartUrls()
+		) | ranges::views::filter([&](const QUrl &url) {
+			if (url.scheme() == u"interpret"_q) {
+				interprets.append(url.path());
+				return false;
+			} else if (url.isLocalFile()) {
+				paths.append(url.toLocalFile());
+				return false;
+			}
+			return true;
+		}) | ranges::to<QList<QUrl>>;
+		if (!interprets.isEmpty() || !paths.isEmpty()) {
+			_lastActivePrimaryWindow->widget()->handleStartFiles(
+				std::move(interprets),
+				std::move(paths));
+		}
 	}
 }
 
@@ -1388,7 +1421,9 @@ Window::Controller *Application::ensureSeparateWindowFor(
 		return window;
 	};
 	if (const auto existing = separateWindowFor(id)) {
-		if (id.thread && id.type == Window::SeparateType::Chat) {
+		if (id.thread
+			&& id.type == Window::SeparateType::Chat
+			&& !passcodeLocked()) {
 			existing->sessionController()->showThread(
 				id.thread,
 				showAtMsgId,
@@ -1402,6 +1437,9 @@ Window::Controller *Application::ensureSeparateWindowFor(
 		std::make_unique<Window::Controller>(id, showAtMsgId)
 	).first->second.get();
 	processCreatedWindow(result);
+	if (passcodeLocked()) {
+		result->setupPasscodeLock();
+	}
 	result->firstShow();
 	result->finishFirstShow();
 	return activate(result);

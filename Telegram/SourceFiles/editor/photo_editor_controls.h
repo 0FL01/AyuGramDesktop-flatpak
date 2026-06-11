@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "editor/photo_editor_inner_common.h"
 
 namespace Ui {
+class AbstractButton;
 class IconButton;
 class FlatLabel;
 class PopupMenu;
@@ -41,11 +42,14 @@ public:
 	[[nodiscard]] rpl::producer<int> rotateRequests() const;
 	[[nodiscard]] rpl::producer<> flipRequests() const;
 	[[nodiscard]] rpl::producer<> paintModeRequests() const;
+	[[nodiscard]] rpl::producer<> textRequests() const;
 	[[nodiscard]] rpl::producer<> doneRequests() const;
 	[[nodiscard]] rpl::producer<> cancelRequests() const;
 	[[nodiscard]] rpl::producer<QPoint> colorLinePositionValue() const;
 	[[nodiscard]] rpl::producer<bool> colorLineShownValue() const;
 	[[nodiscard]] rpl::producer<float64> aspectRatioChanges() const;
+	[[nodiscard]] auto cornersLevelChanges() const
+		-> rpl::producer<RoundedCornersLevel>;
 
 	[[nodiscard]] bool animating() const;
 
@@ -75,6 +79,7 @@ private:
 	const base::unique_qptr<Ui::IconButton> _rotateButton;
 	const base::unique_qptr<Ui::IconButton> _paintModeButton;
 	const base::unique_qptr<Ui::IconButton> _cropRatioButton;
+	const base::unique_qptr<Ui::IconButton> _cornersButton;
 	const base::unique_qptr<EdgeButton> _transformDone;
 
 	const base::unique_qptr<EdgeButton> _paintCancel;
@@ -82,10 +87,13 @@ private:
 	const base::unique_qptr<Ui::IconButton> _redoButton;
 	const base::unique_qptr<Ui::IconButton> _paintModeButtonActive;
 	const base::unique_qptr<Ui::IconButton> _stickersButton;
+	const base::unique_qptr<Ui::AbstractButton> _textButton;
 	const base::unique_qptr<EdgeButton> _paintDone;
 
 	base::unique_qptr<Ui::PopupMenu> _ratioMenu;
+	base::unique_qptr<Ui::PopupMenu> _cornersMenu;
 	float64 _currentRatio = 0.;
+	RoundedCornersLevel _currentCornersLevel = RoundedCornersLevel::Large;
 
 	bool _flipped = false;
 
@@ -94,6 +102,7 @@ private:
 	rpl::variable<PhotoEditorMode> _mode;
 	rpl::event_stream<not_null<QKeyEvent*>> _keyPresses;
 	rpl::event_stream<float64> _aspectRatioChanges;
+	rpl::event_stream<RoundedCornersLevel> _cornersLevelChanges;
 
 };
 

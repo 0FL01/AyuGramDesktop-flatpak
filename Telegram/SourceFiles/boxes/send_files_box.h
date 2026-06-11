@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "base/flags.h"
+#include "data/data_msg_id.h"
 #include "ui/layers/box_content.h"
 #include "ui/chat/attach/attach_prepare.h"
 #include "ui/chat/attach/attach_send_files_way.h"
@@ -62,6 +63,10 @@ class CharactersLimitLabel;
 class ComposeAiButton;
 } // namespace HistoryView::Controls
 
+namespace SendFiles {
+class ReplyPillHeader;
+} // namespace SendFiles
+
 enum class SendFilesAllow {
 	OnlyOne = (1 << 0),
 	Photos = (1 << 1),
@@ -88,10 +93,16 @@ using SendFilesCheck = Fn<bool(
 [[nodiscard]] SendFilesCheck DefaultCheckForPeer(
 	std::shared_ptr<ChatHelpers::Show> show,
 	not_null<PeerData*> peer);
+void RenameFileBox(
+	not_null<Ui::GenericBox*> box,
+	const QString &currentName,
+	bool allowExtensionEdit,
+	Fn<void(QString)> apply);
 
 using SendFilesConfirmed = Fn<void(
 	std::shared_ptr<Ui::PreparedBundle>,
-	Api::SendOptions)>;
+	Api::SendOptions,
+	FullReplyTo)>;
 
 struct SendFilesBoxDescriptor {
 	std::shared_ptr<ChatHelpers::Show> show;
@@ -106,6 +117,7 @@ struct SendFilesBoxDescriptor {
 	SendFilesConfirmed confirmed;
 	Fn<void()> cancelled;
 	Fn<void(const TextWithTags &text)> cancelled2;
+	FullReplyTo replyTo;
 };
 
 class SendFilesBox : public Ui::BoxContent {
@@ -131,6 +143,7 @@ public:
 	void setCancelledCallback(Fn<void()> callback) {
 		_cancelledCallback = std::move(callback);
 	}
+	void setReplyTo(FullReplyTo replyTo);
 
 	[[nodiscard]] rpl::producer<TextWithTags> takeTextWithTagsRequests() const;
 
@@ -166,11 +179,13 @@ private:
 
 		[[nodiscard]] int fromIndex() const;
 		[[nodiscard]] int tillIndex() const;
+		[[nodiscard]] bool isSingleFile() const;
 		[[nodiscard]] object_ptr<Ui::RpWidget> takeWidget();
 
 		[[nodiscard]] rpl::producer<int> itemDeleteRequest() const;
 		[[nodiscard]] rpl::producer<int> itemReplaceRequest() const;
 		[[nodiscard]] rpl::producer<int> itemModifyRequest() const;
+		[[nodiscard]] rpl::producer<int> itemRenameRequest() const;
 		[[nodiscard]] rpl::producer<> orderUpdated() const;
 
 		void setSendWay(Ui::SendFilesWay way);
@@ -212,9 +227,10 @@ private:
 	void setSendLargePhotos(bool enabled);
 	void changePrice();
 
-	[[nodiscard]] bool canChangePrice() const;
 	[[nodiscard]] bool hasPrice() const;
 	[[nodiscard]] bool hasSendLargePhotosOption() const;
+	[[nodiscard]] bool canMoveCaptionInCurrentSendWay() const;
+	[[nodiscard]] bool canChangePrice() const;
 	void refreshPriceTag();
 	[[nodiscard]] QImage preparePriceTagBg(QSize size) const;
 
@@ -243,7 +259,10 @@ private:
 	void updateControlsGeometry();
 	void updateCaptionVisibility();
 
-	bool addFiles(not_null<const QMimeData*> data);
+	bool addFiles(
+		not_null<const QMimeData*> data,
+		std::optional<bool> overrideSendImagesAsPhotos = std::nullopt);
+	void applySendImagesAsPhotosOverride(const Ui::PreparedList &list);
 	bool addFiles(Ui::PreparedList list);
 	void addFile(Ui::PreparedFile &&file);
 	void pushBlock(int from, int till);
@@ -263,7 +282,7 @@ private:
 	void checkCharsLimitation();
 	void refreshMessagesCount();
 
-	void requestToTakeTextWithTags() const;
+	void requestToTakeTextWithTags();
 	bool validateLength(const QString &text) const;
 
 	[[nodiscard]] Fn<MenuDetails()> prepareSendMenuDetails(
@@ -297,6 +316,7 @@ private:
 	std::unique_ptr<Ui::RpWidget> _priceTag;
 	QImage _priceTagBg;
 	bool _confirmed = false;
+	bool _textTaken = false;
 	bool _invertCaption = false;
 
 	const object_ptr<Ui::InputField> _caption;
@@ -317,6 +337,10 @@ private:
 
 	rpl::variable<int> _footerHeight = 0;
 	rpl::lifetime _dimensionsLifetime;
+
+	std::unique_ptr<SendFiles::ReplyPillHeader> _replyHeader;
+	rpl::variable<int> _replyHeaderHeight = 0;
+	FullReplyTo _replyTo;
 
 	object_ptr<Ui::ScrollArea> _scroll;
 	QPointer<Ui::VerticalLayout> _inner;

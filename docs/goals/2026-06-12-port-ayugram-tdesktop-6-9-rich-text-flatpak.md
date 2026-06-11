@@ -5,7 +5,7 @@ Status: active
 Codex goal: `/goal Implement docs/goals/2026-06-12-port-ayugram-tdesktop-6-9-rich-text-flatpak.md until every Completion Audit item is verified by its required evidence, while preserving listed constraints and non-goals. Work checkpoint by checkpoint, update the doc after each meaningful verification, and stop only on verified completion or a repeated blocker with exact evidence and the smallest external action needed.`
 Source spec: user request and RECON from 2026-06-12
 Goal doc owner: Codex
-Last updated: 2026-06-12 00:35
+Last updated: 2026-06-12 01:20
 
 ## Objective
 
@@ -76,29 +76,29 @@ Out of scope:
   - Source: user request for upstream 6.9.2 feature and RECON confirming the feature appears in Telegram Desktop 6.9/6.9.1.
   - Acceptance: selected source base is `telegramdesktop/tdesktop` `v6.9.1` or later public 6.9.x tag; `Telegram/build/version` and `Telegram/SourceFiles/core/version.h` reflect the selected base; changelog includes Rich Text Formatting for Bots.
   - Evidence required: `git show --no-patch --oneline <selected-source-ref>`, `git show <selected-source-ref>:Telegram/build/version`, and diff review after integration.
-  - Status: in_progress
-  - Evidence collected: selected source ref `refs/tmp/recon/telegram/v6.9.1` at `1380c62819c18e8c458d517f1a526adb35d453d3`; `Telegram/build/version` reports `AppVersionStr 6.9.1`; `Telegram/SourceFiles/core/version.h` reports `AppVersion = 6009001` and `AppVersionStr = "6.9.1"`.
+  - Status: verified
+  - Evidence collected: selected source ref `refs/tmp/recon/telegram/v6.9.1` at `1380c62819c18e8c458d517f1a526adb35d453d3`; integrated merge updates `Telegram/build/version` to `AppVersionStr 6.9.1` and `Telegram/SourceFiles/core/version.h` to `AppVersion = 6009001` / `AppVersionStr = "6.9.1"` while preserving `AppName = "AyuGram Desktop"` and `AppFile = "AyuGram"`.
 
 - G3: AyuGram-specific behavior and branding are preserved on the 6.9.x base.
   - Source: repository purpose as AyuGram Flatpak fork and user request for an AyuGram binary.
   - Acceptance: AyuGram app name, binary name, icons, Flatpak app IDs/manifests, and core AyuGram feature source files remain present after integration.
   - Evidence required: targeted diff review for `CMakeLists.txt`, `Telegram/CMakeLists.txt`, `Telegram/SourceFiles/ayu`, `lib/xdg`, `docs/assets/flatpak-files*`, and generated workflow artifact name.
-  - Status: pending
-  - Evidence collected:
+  - Status: in_progress
+  - Evidence collected: checkpoint 3 keeps AyuGram app identity in `Telegram/SourceFiles/core/version.h`, Windows resources, AyuGram submodule URLs, `Telegram/SourceFiles/ayu`, Flatpak manifests, and feature workflow; remote build/runtime evidence remains pending.
 
 - G4: Rich Text Formatting for Bots is retained and not accidentally reverted during conflict resolution.
   - Source: Telegram blog announcement and Telegram Desktop 6.9 changelog found during RECON.
   - Acceptance: rich-message/markdown/IV code paths from Telegram Desktop 6.9.x remain in the integrated tree, including support files and build registration.
   - Evidence required: source diff review for `Telegram/SourceFiles/iv`, rich-message files, markdown parser integration, `Telegram/CMakeLists.txt`, and submodules `cmark-gfm` and `MicroTeX`.
-  - Status: pending
-  - Evidence collected:
+  - Status: in_progress
+  - Evidence collected: checkpoint 3 keeps Telegram 6.9.1 `Telegram/SourceFiles/iv/markdown` sources, `iv/iv_rich_*` files, `Telegram/cmake/td_iv.cmake` cmark-gfm/MicroTeX link registration, `.gitmodules` entries, and `Telegram/SourceFiles/history/history_item.cpp` rich-message parsing path; remote build evidence remains pending.
 
 - G5: Submodule metadata and pointers are valid for both AyuGram forks and Telegram Desktop 6.9.x additions.
   - Source: RECON `.gitmodules` diff and existing AyuGram fork overrides.
   - Acceptance: `.gitmodules` preserves AyuGram URLs for `codegen`, `lib_ui`, `lib_tl`, `lib_icu`; adds Telegram 6.9.x `cmark-gfm` and `MicroTeX`; `git submodule sync --recursive` and update can run on the remote runner.
   - Evidence required: `.gitmodules` diff review and successful remote workflow submodule initialization logs.
   - Status: in_progress
-  - Evidence collected: checkpoint 2 confirms selected Telegram 6.9.1 source ref; `.gitmodules` integration and submodule pointer validation remain for checkpoint 3.
+  - Evidence collected: `.gitmodules` preserves AyuGram URLs for `codegen`, `lib_ui`, `lib_tl`, `lib_icu` and adds `Telegram/ThirdParty/cmark-gfm` plus `Telegram/ThirdParty/MicroTeX`; staged gitlinks show AyuGram `codegen` `17a10c1b`, AyuGram `lib_ui` `cf3632f5`, `cmark-gfm` `587a12b`, and `MicroTeX` `f62f9dc`; remote submodule initialization logs remain pending.
 
 - G6: Existing feature Flatpak workflow builds a `.flatpak` bundle on the remote runner.
   - Source: user clarification to use ready build manifests and `flatpak-feature.yml`.
@@ -125,8 +125,8 @@ Out of scope:
   - Source: merge/rebase workflow requirement.
   - Acceptance: no conflict markers remain and `git status` does not show unmerged paths.
   - Evidence required: `git status --short`, `rg '<<<<<<<|=======|>>>>>>>'` limited to source/config/docs with expected exclusions if any.
-  - Status: pending
-  - Evidence collected:
+  - Status: verified
+  - Evidence collected: checkpoint 3 merge has no unmerged paths after conflict resolution; `rg -n '^(<<<<<<<|=======|>>>>>>>)' Telegram CMakeLists.txt .gitmodules .github README.md AGENTS.md REVIEW.md` returned no matches; `git diff --check --cached` returned clean.
 
 - V2: Remote feature build validates source build and Flatpak repack.
   - Source: `.github/workflows/flatpak-feature.yml`.
@@ -146,8 +146,8 @@ Out of scope:
   - Source: user clarification to use `flatpak-feature.yml`.
   - Must preserve: stable workflow remains out of first-pass validation and is not dispatched for this checkpoint.
   - Evidence required: progress log and command history showing feature workflow as planned validation.
-  - Status: in_progress
-  - Evidence collected: checkpoint 2 used local ref/version inspection only; stable release workflow was not dispatched.
+  - Status: verified
+  - Evidence collected: checkpoints 2-3 used local integration and inspection only; `.github/workflows/flatpak-feature.yml` remains the planned remote validation path; stable release workflow was not dispatched.
 
 ## Implementation Plan
 
@@ -206,6 +206,7 @@ Out of scope:
 - 2026-06-12: Target Telegram Desktop `v6.9.1` unless `v6.9.2` source appears, because public source discovery found `v6.9.1` as the latest Telegram Desktop tag and AyuGram `v6.7.8` as the latest AyuGram tag.
 - 2026-06-12: Use `.github/workflows/flatpak-feature.yml` for first build validation, because the user confirmed the build runs on a remote runner with the existing feature manifest.
 - 2026-06-12: Lock checkpoint 2 integration target to Telegram Desktop `v6.9.1` commit `1380c62819c18e8c458d517f1a526adb35d453d3`; public tag check still shows no Telegram Desktop or AyuGram `v6.9.2` tag.
+- 2026-06-12: Resolve checkpoint 3 by merging Telegram Desktop `v6.9.1` into the AyuGram Flatpak branch, keeping AyuGram identity/submodule forks and manually preserving Telegram 6.9 rich-message/markdown integration in conflicted code paths.
 
 ## Progress Log
 
@@ -222,6 +223,13 @@ Out of scope:
   - Commands: `git for-each-ref --format='%(refname:short) %(objectname)' refs/tmp/recon/telegram/v6.9.1 refs/tmp/recon/ayu/v6.7.8 refs/tmp/recon/telegram/v6.7.8 refs/tmp/recon/ayu/dev`, `git show --no-patch --oneline refs/tmp/recon/telegram/v6.9.1`, `git show refs/tmp/recon/telegram/v6.9.1:Telegram/build/version`, `git show refs/tmp/recon/telegram/v6.9.1:Telegram/SourceFiles/core/version.h`, `git ls-remote --tags https://github.com/telegramdesktop/tdesktop.git 'refs/tags/v6.9*'`, `git ls-remote --tags https://github.com/AyuGram/AyuGramDesktop.git 'refs/tags/v6.9*'`.
   - Audit IDs updated: G1, G2, G5, V3, N1.
   - Next: integrate the AyuGram delta onto the Telegram Desktop `v6.9.1` base and resolve conflicts in checkpoint 3.
+
+- 2026-06-12 01:20: Checkpoint 3 completed locally: Telegram Desktop `v6.9.1` merged into the AyuGram Flatpak branch.
+  - Changed: merged source tree, resolved all unmerged paths, kept AyuGram branding and Flatpak packaging, added Telegram 6.9 markdown/rich-message sources and submodules.
+  - Evidence: `Telegram/build/version` and `Telegram/SourceFiles/core/version.h` now report `6.9.1`; `.gitmodules` includes AyuGram fork URLs plus `cmark-gfm` and `MicroTeX`; `Telegram/cmake/td_iv.cmake` links `desktop-app::external_cmark_gfm` and `desktop-app::external_microtex`; conflict marker grep and staged whitespace check returned clean.
+  - Commands: `git merge --no-commit --no-ff refs/tmp/recon/telegram/v6.9.1`, `git diff --name-only --diff-filter=U`, `rg -n '^(<<<<<<<|=======|>>>>>>>)' Telegram CMakeLists.txt .gitmodules .github README.md AGENTS.md REVIEW.md`, `git diff --check --cached`, `git submodule status --recursive`.
+  - Audit IDs updated: G2, G3, G4, G5, V1, N1.
+  - Next: commit checkpoint 3, then run `.github/workflows/flatpak-feature.yml` on the remote runner for build-level validation.
 
 ## Risks and Blockers
 

@@ -464,6 +464,10 @@ bool Controller::isLayerShown() const {
 	return _widget.ui_isLayerShown();
 }
 
+rpl::producer<bool> Controller::boxShownValue() const {
+	return _widget.ui_boxShownValue();
+}
+
 void Controller::sideBarChanged() {
 	_widget.recountGeometryConstraints();
 }

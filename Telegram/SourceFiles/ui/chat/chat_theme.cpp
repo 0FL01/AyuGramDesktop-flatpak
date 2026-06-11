@@ -573,6 +573,7 @@ ChatPaintContext ChatTheme::preparePaintContext(
 	const auto size = viewport.size();
 	const auto now = crl::now();
 	if (!_bubblesBackgroundPrepared.isNull()
+		&& !size.isEmpty()
 		&& _bubblesBackground.area != size) {
 		if (!_cacheBubblesTimer) {
 			_cacheBubblesTimer.emplace([=] { cacheBubbles(); });
@@ -601,6 +602,9 @@ const BackgroundState &ChatTheme::backgroundState(QSize area) {
 		_cacheBackgroundTimer.emplace([=] { cacheBackground(); });
 	}
 	_backgroundState.shown = _backgroundFade.value(1.);
+	if (area.isEmpty()) {
+		return _backgroundState;
+	}
 	if (_backgroundState.now.pixmap.isNull()
 		&& !background().gradientForFill.isNull()) {
 		// We don't support direct painting of patterned gradients.
@@ -878,6 +882,7 @@ ChatBackgroundRects ComputeChatBackgroundRects(
 }
 
 QColor CountAverageColor(const QImage &image) {
+	Expects(!image.isNull());
 	Expects(image.format() == QImage::Format_ARGB32_Premultiplied
 		|| image.format() == QImage::Format_RGB32);
 

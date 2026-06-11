@@ -35,12 +35,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/components/location_pickers.h"
 #include "data/components/passkeys.h"
 #include "data/components/promo_suggestions.h"
+#include "data/components/recent_inline_bots.h"
 #include "data/components/recent_peers.h"
 #include "data/components/recent_shared_media_gifts.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/sponsored_messages.h"
 #include "data/components/top_peers.h"
 #include "settings/settings_faq_suggestions.h"
+#include "settings/settings_recent_searches.h"
 #include "data/data_session.h"
 #include "data/data_changes.h"
 #include "data/data_user.h"
@@ -163,6 +165,10 @@ Session::Session(
 , _topPeers(std::make_unique<Data::TopPeers>(this, Data::TopPeerType::Chat))
 , _topBotApps(
 	std::make_unique<Data::TopPeers>(this, Data::TopPeerType::BotApp))
+, _topGuestChatBots(std::make_unique<Data::TopPeers>(
+	this,
+	Data::TopPeerType::BotGuestChat))
+, _recentInlineBots(std::make_unique<Data::RecentInlineBots>(this))
 , _factchecks(std::make_unique<Data::Factchecks>(this))
 , _locationPickers(std::make_unique<Data::LocationPickers>())
 , _credits(std::make_unique<Data::Credits>(this))
@@ -201,6 +207,7 @@ Session::Session(
 }))
 , _passkeys(std::make_unique<Data::Passkeys>(this))
 , _faqSuggestions(std::make_unique<Settings::FaqSuggestions>(this))
+, _recentSettingsSearches(std::make_unique<Settings::RecentSearches>(this))
 , _cachedReactionIconFactory(std::make_unique<ReactionIconFactory>())
 , _supportHelper(Support::Helper::Create(this))
 , _fastButtonsBots(std::make_unique<Support::FastButtonsBots>(this))

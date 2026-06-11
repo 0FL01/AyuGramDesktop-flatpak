@@ -97,3 +97,9 @@
 [submodule "Telegram/lib_icu"]
 	path = Telegram/lib_icu
 	url = https://github.com/AyuGram/lib_icu.git
+[submodule "Telegram/ThirdParty/cmark-gfm"]
+	path = Telegram/ThirdParty/cmark-gfm
+	url = https://github.com/github/cmark-gfm.git
+[submodule "Telegram/ThirdParty/MicroTeX"]
+	path = Telegram/ThirdParty/MicroTeX
+	url = https://github.com/desktop-app/MicroTeX.git

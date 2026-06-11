@@ -33,6 +33,7 @@ namespace Data {
 class Session;
 class Changes;
 class GiftAuctions;
+class RecentInlineBots;
 class RecentPeers;
 class RecentSharedMediaGifts;
 class ScheduledMessages;
@@ -47,6 +48,7 @@ class Passkeys;
 
 namespace Settings {
 class FaqSuggestions;
+class RecentSearches;
 } // namespace Settings
 
 namespace HistoryView::Reactions {
@@ -158,6 +160,12 @@ public:
 	[[nodiscard]] Data::TopPeers &topBotApps() const {
 		return *_topBotApps;
 	}
+	[[nodiscard]] Data::TopPeers &topGuestChatBots() const {
+		return *_topGuestChatBots;
+	}
+	[[nodiscard]] Data::RecentInlineBots &recentInlineBots() const {
+		return *_recentInlineBots;
+	}
 	[[nodiscard]] Data::Factchecks &factchecks() const {
 		return *_factchecks;
 	}
@@ -211,6 +219,9 @@ public:
 	}
 	[[nodiscard]] Settings::FaqSuggestions &faqSuggestions() const {
 		return *_faqSuggestions;
+	}
+	[[nodiscard]] Settings::RecentSearches &recentSettingsSearches() const {
+		return *_recentSettingsSearches;
 	}
 	[[nodiscard]] auto cachedReactionIconFactory() const
 	-> HistoryView::Reactions::CachedIconFactory & {
@@ -312,12 +323,15 @@ private:
 	const std::unique_ptr<Data::SponsoredMessages> _sponsoredMessages;
 	const std::unique_ptr<Data::TopPeers> _topPeers;
 	const std::unique_ptr<Data::TopPeers> _topBotApps;
+	const std::unique_ptr<Data::TopPeers> _topGuestChatBots;
+	const std::unique_ptr<Data::RecentInlineBots> _recentInlineBots;
 	const std::unique_ptr<Data::Factchecks> _factchecks;
 	const std::unique_ptr<Data::LocationPickers> _locationPickers;
 	const std::unique_ptr<Data::Credits> _credits;
 	const std::unique_ptr<Data::PromoSuggestions> _promoSuggestions;
 	const std::unique_ptr<Data::Passkeys> _passkeys;
 	const std::unique_ptr<Settings::FaqSuggestions> _faqSuggestions;
+	const std::unique_ptr<Settings::RecentSearches> _recentSettingsSearches;
 
 	using ReactionIconFactory = HistoryView::Reactions::CachedIconFactory;
 	const std::unique_ptr<ReactionIconFactory> _cachedReactionIconFactory;

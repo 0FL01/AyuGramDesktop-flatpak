@@ -119,6 +119,8 @@ public:
 	bool showBackFromStackInternal(const Window::SectionShow &params);
 	void removeFromStack(const std::vector<Section> &sections);
 	std::shared_ptr<Window::SectionMemento> createMemento() override;
+	[[nodiscard]] SendMenu::Details sendMenuDetails() const override;
+	bool processChosenSticker(ChatHelpers::FileChosen &&chosen) override;
 
 	rpl::producer<int> desiredHeightValue() const override;
 
@@ -229,7 +231,6 @@ private:
 	object_ptr<TopBar> _topBar = { nullptr };
 	object_ptr<Ui::RpWidget> _topBarSurrogate = { nullptr };
 	Ui::Animations::Simple _topBarOverrideAnimation;
-	bool _topBarOverrideShown = false;
 
 	object_ptr<Ui::FadeShadow> _topShadow;
 	object_ptr<Ui::FadeShadow> _bottomShadow;

@@ -29,7 +29,8 @@ constexpr auto kThemePreviewOffset = kRadialLoadingOffset + 4;
 constexpr auto kDocumentBubbleOffset = kThemePreviewOffset + 4;
 constexpr auto kSaveMsgOffset = kDocumentBubbleOffset + 4;
 constexpr auto kChapterOffset = kSaveMsgOffset + 4;
-constexpr auto kFooterOffset = kChapterOffset + 4;
+constexpr auto kSpeedBoostOffset = kChapterOffset + 4;
+constexpr auto kFooterOffset = kSpeedBoostOffset + 4;
 constexpr auto kCaptionOffset = kFooterOffset + 4;
 constexpr auto kGroupThumbsOffset = kCaptionOffset + 4;
 constexpr auto kControlsOffset = kGroupThumbsOffset + 4;
@@ -273,6 +274,16 @@ void OverlayWidget::RendererGL::init(QOpenGLFunctions &f) {
 
 void OverlayWidget::RendererGL::deinit(QOpenGLFunctions *f) {
 	_textures.destroy(f);
+	for (auto i = 0; i != 3; ++i) {
+		_rgbaSize[i] = QSize();
+		_cacheKeys[i] = 0;
+	}
+	_lumaSize = QSize();
+	_chromaSize = QSize();
+	_chromaSizeV = QSize();
+	_chromaNV12 = false;
+	_trackFrameIndex = 0;
+	_streamedIndex = 0;
 	_imageProgram = std::nullopt;
 	_texturedVertexShader = nullptr;
 	_withTransparencyProgram = std::nullopt;
@@ -385,6 +396,16 @@ void OverlayWidget::RendererGL::paintTransformedVideoFrame(
 			data.alpha,
 			data.alpha);
 		return;
+	} else if (data.format == Streaming::FrameFormat::NativeTexture) {
+		const auto image = _owner->currentVideoFrameImage();
+		if (!image.isNull()) {
+			paintTransformedStaticContent(
+				image,
+				geometry,
+				data.alpha,
+				data.alpha);
+		}
+		return;
 	}
 	Assert(!data.yuv->size.isEmpty());
 	const auto program = (data.format == Streaming::FrameFormat::NV12)
@@ -423,8 +444,8 @@ void OverlayWidget::RendererGL::paintTransformedVideoFrame(
 			nv12changed ? QSize() : _chromaSize,
 			yuv->u.stride / (nv12 ? 2 : 1),
 			yuv->u.data);
+		_chromaSize = yuv->chromaSize;
 		if (nv12) {
-			_chromaSize = yuv->chromaSize;
 			_f->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 		}
 		_chromaNV12 = nv12;
@@ -442,10 +463,10 @@ void OverlayWidget::RendererGL::paintTransformedVideoFrame(
 				GL_ALPHA,
 				GL_ALPHA,
 				yuv->chromaSize,
-				_chromaSize,
+				_chromaSizeV,
 				yuv->v.stride,
 				yuv->v.data);
-			_chromaSize = yuv->chromaSize;
+			_chromaSizeV = yuv->chromaSize;
 			_f->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 		}
 
@@ -730,6 +751,13 @@ void OverlayWidget::RendererGL::paintChapter(QRect outer) {
 		const auto newOuter = QRect(QPoint(), outer.size());
 		_owner->paintChapterContent(p, newOuter, newOuter);
 	}, kChapterOffset, true);
+}
+
+void OverlayWidget::RendererGL::paintSpeedBoost(QRect outer) {
+	paintUsingRaster(_speedBoostImage, outer, [&](Painter &&p) {
+		const auto newOuter = QRect(QPoint(), outer.size());
+		_owner->paintSpeedBoostContent(p, newOuter, newOuter);
+	}, kSpeedBoostOffset, true);
 }
 
 void OverlayWidget::RendererGL::paintControlsStart() {

@@ -100,6 +100,7 @@ struct TabbedSelectorDescriptor {
 	TabbedSelectorMode mode = TabbedSelectorMode::Full;
 	Fn<QColor()> customTextColor;
 	ComposeFeatures features;
+	uint64 excludeStickerSetId = 0;
 };
 
 enum class TabbedSearchType {
@@ -295,6 +296,7 @@ private:
 	const std::shared_ptr<Show> _show;
 	const PauseReason _level = {};
 	const Fn<QColor()> _customTextColor;
+	const uint64 _excludeStickerSetId = 0;
 
 	Ui::Controls::SwipeBackResult _swipeBackData;
 
@@ -417,7 +419,8 @@ protected:
 	void scrollTo(int y);
 	void disableScroll(bool disabled);
 
-	void checkHideWithBox(object_ptr<Ui::BoxContent> box);
+	void showBoxPreventHide(object_ptr<Ui::BoxContent> box);
+	void preventHideWithBox(base::weak_qptr<Ui::BoxContent> weak);
 
 	void paintEmptySearchResults(
 		Painter &p,

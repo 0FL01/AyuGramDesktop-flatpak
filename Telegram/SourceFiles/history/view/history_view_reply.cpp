@@ -395,7 +395,6 @@ void Reply::update(
 	_hasPreview = hasPreview ? 1 : 0;
 	_displaying = data->displaying() ? 1 : 0;
 	_multiline = data->multiline() ? 1 : 0;
-	_replyToStory = (fields.storyId != 0);
 	const auto hasQuoteIcon = _displaying
 		&& fields.manualQuote
 		&& !fields.quote.empty();
@@ -423,12 +422,18 @@ void Reply::update(
 			.image = MakePollAnswerImage(),
 			.margin = QMargins(0, st::lineWidth, st::lineWidth, 0),
 		})).append(pollAnswer->text)
+		: messagePoll
+		? Ui::Text::Colorized(
+			Ui::Text::IconEmoji(&st::historyPollReplyIcon)
+		).append(messagePoll->question)
 		: (message && (fields.quote.empty() || !fields.manualQuote))
 		? message->inReplyText()
 		: !fields.quote.empty()
 		? fields.quote
 		: story
-		? story->inReplyText()
+		? Ui::Text::Colorized(
+			Ui::Text::IconEmoji(&st::historyReplyStoryIcon)
+		).append(story->inReplyText())
 		: externalMedia
 		? externalMedia->toPreview({
 			.hideSender = true,
@@ -677,15 +682,10 @@ void Reply::updateName(
 		+ (_hasQuoteIcon
 			? st::messageTextStyle.blockquote.icon.width()
 			: 0);
-	const auto storySkip = fields.storyId
-		? (st::dialogsMiniReplyStory.skipText
-			+ st::dialogsMiniReplyStory.icon.icon.width())
-		: 0;
 	const auto optimalTextSize = _multiline
 		? countMultilineOptimalSize(previewSkip)
 		: QSize(
 			(previewSkip
-				+ storySkip
 				+ std::min(_text.maxWidth(), st::maxSignatureSize)),
 			st::normalFont->height);
 	_maxWidth = std::max(nameMaxWidth, optimalTextSize.width());
@@ -1018,16 +1018,6 @@ void Reply::paint(
 					owned.emplace(cache->icon);
 					copy->linkFg = owned->color();
 					replyToTextPalette = &*copy;
-				}
-				if (_replyToStory) {
-					st::dialogsMiniReplyStory.icon.icon.paint(
-						p,
-						textLeft + firstLineSkip,
-						textTop,
-						w + 2 * x,
-						replyToTextPalette->linkFg->c);
-					firstLineSkip += st::dialogsMiniReplyStory.skipText
-						+ st::dialogsMiniReplyStory.icon.icon.width();
 				}
 				_text.draw(p, {
 					.position = { textLeft, textTop },
