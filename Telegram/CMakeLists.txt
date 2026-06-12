@@ -475,8 +475,6 @@ PRIVATE
     boxes/gift_premium_box.h
     boxes/language_box.cpp
     boxes/language_box.h
-    boxes/local_storage_box.cpp
-    boxes/local_storage_box.h
     boxes/max_invite_box.cpp
     boxes/max_invite_box.h
     boxes/moderate_messages_box.cpp
