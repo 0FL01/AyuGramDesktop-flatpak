@@ -159,7 +159,7 @@ jobs:
             -e TDESKTOP_API_HASH \
             -v "$PWD:/usr/src/tdesktop" \
             -v "$PWD/.ccache:/ccache" \
-            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
+            tdesktop:centos_env \
             /bin/bash /usr/src/tdesktop/.github/scripts/build-tdesktop-binary.sh
 
       - name: Verify binary exists

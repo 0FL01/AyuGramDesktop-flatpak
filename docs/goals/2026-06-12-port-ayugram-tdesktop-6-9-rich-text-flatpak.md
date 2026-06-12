@@ -5,7 +5,7 @@ Status: active
 Codex goal: `/goal Implement docs/goals/2026-06-12-port-ayugram-tdesktop-6-9-rich-text-flatpak.md until every Completion Audit item is verified by its required evidence, while preserving listed constraints and non-goals. Work checkpoint by checkpoint, update the doc after each meaningful verification, and stop only on verified completion or a repeated blocker with exact evidence and the smallest external action needed.`
 Source spec: user request and RECON from 2026-06-12
 Goal doc owner: Codex
-Last updated: 2026-06-12 01:20
+Last updated: 2026-06-12 01:55
 
 ## Objective
 
@@ -207,6 +207,7 @@ Out of scope:
 - 2026-06-12: Use `.github/workflows/flatpak-feature.yml` for first build validation, because the user confirmed the build runs on a remote runner with the existing feature manifest.
 - 2026-06-12: Lock checkpoint 2 integration target to Telegram Desktop `v6.9.1` commit `1380c62819c18e8c458d517f1a526adb35d453d3`; public tag check still shows no Telegram Desktop or AyuGram `v6.9.2` tag.
 - 2026-06-12: Resolve checkpoint 3 by merging Telegram Desktop `v6.9.1` into the AyuGram Flatpak branch, keeping AyuGram identity/submodule forks and manually preserving Telegram 6.9 rich-message/markdown integration in conflicted code paths.
+- 2026-06-12: Use the locally prepared `tdesktop:centos_env` image for the feature binary build instead of `ghcr.io/telegramdesktop/tdesktop/centos_env:latest`, because Telegram 6.9.1 requires CMake 3.31 and the pulled image exposed CMake 3.26.5 during the remote run.
 
 ## Progress Log
 
@@ -230,6 +231,13 @@ Out of scope:
   - Commands: `git merge --no-commit --no-ff refs/tmp/recon/telegram/v6.9.1`, `git diff --name-only --diff-filter=U`, `rg -n '^(<<<<<<<|=======|>>>>>>>)' Telegram CMakeLists.txt .gitmodules .github README.md AGENTS.md REVIEW.md`, `git diff --check --cached`, `git submodule status --recursive`.
   - Audit IDs updated: G2, G3, G4, G5, V1, N1.
   - Next: commit checkpoint 3, then run `.github/workflows/flatpak-feature.yml` on the remote runner for build-level validation.
+
+- 2026-06-12 01:55: Remote feature build failed at `Build AyuGram binary` before CMake configure.
+  - Changed: `.github/workflows/flatpak-feature.yml` now runs the already prepared `tdesktop:centos_env` image for the binary build.
+  - Evidence: remote log reported `CMake 3.31 or higher is required. You are running version 3.26.5`; workflow already builds `tdesktop:centos_env` in `Prepare libraries`, whose Dockerfile installs CMake through `python3 -m pip install cmake meson ninja`.
+  - Commands: inspected `.github/workflows/flatpak-feature.yml`, `.github/scripts/build-centos-env.sh`, `.github/scripts/build-tdesktop-binary.sh`, and `Telegram/build/docker/centos_env/Dockerfile`.
+  - Audit IDs updated: V2, Q1.
+  - Next: rerun `.github/workflows/flatpak-feature.yml` on `goal/port-tdesktop-6.9-rich-text-flatpak` after this fix is pushed.
 
 ## Risks and Blockers
 
