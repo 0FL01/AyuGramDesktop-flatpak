@@ -68,6 +68,11 @@ jobs:
             git -c submodule.fetchJobs=1 submodule update --init --force --recursive
           fi
 
+      - name: "Apply issue #9 Timer range-saturation patch"
+        run: |
+          python3 --version >/dev/null 2>&1 || sudo dnf install -y python3
+          python3 .github/scripts/apply-issue9-timer-fix.py
+
       - name: Verify secrets
         run: |
           if [ -z "${{ secrets.TDESKTOP_API_ID }}" ] || [ -z "${{ secrets.TDESKTOP_API_HASH }}" ]; then
