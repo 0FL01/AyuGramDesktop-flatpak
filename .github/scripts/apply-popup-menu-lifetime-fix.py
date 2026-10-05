@@ -14,6 +14,10 @@
 #      -> focus event -> clearMouseSelection), findSelectedAction()
 #      returns nullptr -> not_null(null) -> Expects -> SIGSEGV.
 #
+#      Upstream v7.2.9 passes _menu->itemForAction(action) as
+#      parentActionWidget instead of reading the selection, so that form
+#      is accepted as already fixed.
+#
 #   B) PopupMenu::handleTriggered / DropdownMenu::handleTriggered call
 #      data.action->trigger() without null guard. popupSubmenuFromAction
 #      guards for null internally (returns false), but handleTriggered
@@ -72,6 +76,11 @@ patches = [
                 f"{T}{T}{T}{T}{T}parentActionWidget->size())\n"
                 f"{T}{T}{T}{T}+ _st.scrollPadding);\n"
                 f"{T}{T}}} else if (padding.top()) {{",
+                "if (_parent) {\n"
+                f"{T}{T}{T}// we must have an action to position the submenu around\n"
+                f"{T}{T}{T}Assert(parentActionWidget != nullptr);\n"
+                f"{T}{T}{T}const auto rect = QRect(\n"
+                f"{T}{T}{T}{T}parentActionWidget->mapTo(\n",
             ),
             # --- Fix B: handleTriggered null guard ---
             (

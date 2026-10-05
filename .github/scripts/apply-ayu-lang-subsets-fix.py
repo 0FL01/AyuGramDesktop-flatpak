@@ -9,6 +9,11 @@ PATH = ROOT / "Telegram/codegen/codegen/lang/subsets.cpp"
 
 T = "\t"
 
+UPSTREAM_FIX = (
+    f"{T}{T}{T}|| (data[i] == 'a' && data[i + 1] == 'y'\n"
+    f"{T}{T}{T}{T}&& data[i + 2] == 'u' && data[i + 3] == '_');"
+)
+
 edits = [
     (
         "constexpr auto kCacheVersion = quint32(1);",
@@ -43,6 +48,9 @@ def main():
         return 1
 
     text = PATH.read_text(encoding="utf-8")
+    if UPSTREAM_FIX in text:
+        print("skip (already fixed upstream): AyuGram language subset scanning")
+        return 0
     for old, new in edits:
         if new in text:
             continue

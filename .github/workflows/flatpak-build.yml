@@ -91,13 +91,9 @@ jobs:
             if git -c submodule.fetchJobs=1 submodule update --init --force --recursive --depth=1; then
               exit 0
             fi
-            git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
             sleep $((attempt * 20))
           done
-          if ! git -c submodule.fetchJobs=1 submodule update --init --force --recursive --depth=1; then
-            git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git
-            git -c submodule.fetchJobs=1 submodule update --init --force --recursive
-          fi
+          git -c submodule.fetchJobs=1 submodule update --init --force --recursive
 
       - name: "Apply issue #9 Timer range-saturation patch"
         run: |
@@ -192,13 +188,6 @@ jobs:
           bash .github/scripts/ci-retry.sh flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           bash .github/scripts/ci-retry.sh flatpak install --user -y --noninteractive org.gnome.Sdk//50
           bash .github/scripts/ci-retry.sh flatpak install --user -y --noninteractive org.gnome.Platform//50
-  
-      - name: Cache TDesktop Dependencies
-        id: cache-tdesktop-deps
-        uses: actions/cache@v4
-        with:
-            path: Telegram/ThirdParty
-            key: ${{ runner.os }}-tdeps-${{ hashFiles('Telegram/build/prepare/dependencies.txt') }}
   
       - name: Restore Qt6 libraries cache
         id: cache-qt6-restore
